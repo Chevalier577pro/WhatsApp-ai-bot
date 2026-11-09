@@ -1,0 +1,22 @@
+{
+  "name": "whatsapp-ai-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp IA (modèles NVIDIA) avec site de connexion par code d'appairage, prêt pour Render + GitHub.",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node test/smoke.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^7.0.0-rc.3",
+    "mongodb": "^6.10.0",
+    "pino": "^9.6.0",
+    "qrcode": "^1.5.4"
+  },
+  "license": "MIT"
+}

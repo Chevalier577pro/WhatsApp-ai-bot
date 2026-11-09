@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: whatsapp-ai-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NVIDIA_MODEL
+        value: nvidia/nemotron-3-ultra-550b-a55b
+      - key: PREFIX
+        value: "."
+      - key: TIME_ZONE
+        value: Europe/Paris
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_ID
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: OWNER_NAME
+        sync: false
+      - key: BOT_NAME
+        sync: false

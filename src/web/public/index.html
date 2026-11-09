@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Connexion WhatsApp — Bot IA</title>
+<style>
+:root{--bg:#0b141a;--card:#111b21;--line:#233138;--text:#e9edef;--muted:#8696a0;--green:#25d366;--green2:#00a884;--red:#f15c6d;--amber:#ffb02e;--chip:#202c33}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;justify-content:center;padding:24px 14px}
+main{width:100%;max-width:520px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.logo{width:44px;height:44px;border-radius:12px;background:var(--green2);display:grid;place-items:center;font-size:24px;flex:none}
+h1{font-size:19px;margin:0}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.badge{margin-left:auto;font-size:12px;padding:6px 10px;border-radius:999px;background:var(--chip);color:var(--muted);white-space:nowrap}
+.badge.ok{background:rgba(37,211,102,.15);color:var(--green)}
+.badge.wait{background:rgba(255,176,46,.15);color:var(--amber)}
+.badge.err{background:rgba(241,92,109,.15);color:var(--red)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+.card h2{font-size:16px;margin:0 0 10px}
+label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
+input,textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px;font-size:16px;outline:none}
+input:focus,textarea:focus{border-color:var(--green2)}
+textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;resize:vertical;min-height:96px;word-break:break-all}
+button{appearance:none;border:0;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:600;cursor:pointer;background:var(--green2);color:#fff;margin-top:12px;width:100%}
+button.secondary{background:var(--chip);color:var(--text)}
+button.danger{background:transparent;color:var(--red);border:1px solid rgba(241,92,109,.4)}
+button:disabled{opacity:.55;cursor:default}
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);padding:4px;border-radius:12px;margin-bottom:14px}
+.tabs button{margin:0;background:transparent;color:var(--muted);padding:9px 6px;font-size:14px}
+.tabs button.active{background:var(--chip);color:var(--text)}
+.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:4px;text-align:center;padding:16px 8px;background:var(--bg);border:1px dashed var(--green2);border-radius:12px;margin-top:14px;user-select:all}
+.muted{color:var(--muted);font-size:13px;line-height:1.55;margin:0}
+ol{padding-left:20px;line-height:1.7;font-size:14px;margin:12px 0 0}
+.qr{display:block;margin:14px auto 0;width:264px;max-width:100%;background:#fff;border-radius:12px;padding:10px}
+.msg{font-size:14px;margin-top:12px;padding:10px 12px;border-radius:10px;display:none;line-height:1.45}
+.msg.show{display:block}
+.msg.err{background:rgba(241,92,109,.12);color:var(--red)}
+.msg.ok{background:rgba(37,211,102,.12);color:var(--green)}
+.hidden{display:none!important}
+.timer{text-align:center;color:var(--muted);font-size:13px;margin-top:8px}
+footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px;line-height:1.6}
+code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="logo">🤖</div>
+    <div>
+      <h1 id="title">Bot WhatsApp IA</h1>
+      <div class="sub">Connexion de ton compte WhatsApp</div>
+    </div>
+    <span id="badge" class="badge">…</span>
+  </header>
+
+  <section id="pwdCard" class="card hidden">
+    <h2>🔒 Mot de passe administrateur</h2>
+    <p class="muted">C'est la valeur de la variable <code>ADMIN_PASSWORD</code> que tu as définie sur Render.</p>
+    <input id="pwd" type="password" placeholder="Mot de passe" autocomplete="current-password">
+    <button id="pwdBtn">Valider</button>
+    <div id="pwdMsg" class="msg"></div>
+  </section>
+
+  <section id="connectedCard" class="card hidden">
+    <h2>✅ WhatsApp connecté</h2>
+    <p class="muted" id="who"></p>
+    <div id="sessionBox" class="hidden">
+      <label for="sessionId">Ton SESSION_ID (garde-le secret : il donne accès à ton WhatsApp)</label>
+      <textarea id="sessionId" readonly></textarea>
+      <button id="copySession">📋 Copier le SESSION_ID</button>
+      <ol>
+        <li>Sur Render, ouvre ton service → <b>Environment</b>.</li>
+        <li>Colle la valeur dans la variable <code>SESSION_ID</code> puis <b>Save changes</b>.</li>
+        <li>Le bot se reconnectera tout seul après chaque redémarrage.</li>
+      </ol>
+    </div>
+    <button id="showSession" class="secondary hidden">🔑 Afficher mon SESSION_ID</button>
+    <button id="logoutBtn" class="danger hidden">Déconnecter ce WhatsApp</button>
+    <div id="connMsg" class="msg"></div>
+    <p class="muted" id="noPwdHint" style="margin-top:12px">Pour afficher ton SESSION_ID ou déconnecter le bot depuis ce site, ajoute la variable <code>ADMIN_PASSWORD</code> sur Render. Tu peux aussi envoyer <code>.session</code> dans ta discussion avec toi-même.</p>
+    <p class="muted" style="margin-top:12px">Sur WhatsApp, envoie <code>.menu</code> dans ta discussion avec toi-même (« Moi ») pour voir toutes les options.</p>
+  </section>
+
+  <section id="pairCard" class="hidden">
+    <div id="statusMsg" class="msg"></div>
+    <div class="tabs">
+      <button data-tab="code" class="active">🔢 Code</button>
+      <button data-tab="qr">📷 QR code</button>
+      <button data-tab="import">🔑 SESSION_ID</button>
+    </div>
+
+    <div id="tab-code" class="card">
+      <h2>Connexion avec un code</h2>
+      <label for="phone">Ton numéro WhatsApp au format international (indicatif + numéro, sans le 0)</label>
+      <input id="phone" inputmode="tel" placeholder="33612345678" autocomplete="tel">
+      <button id="pairBtn">Obtenir mon code</button>
+      <div id="pairResult" class="hidden">
+        <div id="code" class="code">----</div>
+        <div id="timer" class="timer"></div>
+        <button id="copyCode" class="secondary">📋 Copier le code</button>
+        <ol>
+          <li>Ouvre <b>WhatsApp</b> sur ton téléphone.</li>
+          <li><b>Réglages</b> (ou ⋮) → <b>Appareils connectés</b> → <b>Connecter un appareil</b>.</li>
+          <li>Touche <b>Connecter avec un numéro de téléphone</b>.</li>
+          <li>Saisis le code ci-dessus. Le bot se connecte tout seul.</li>
+        </ol>
+      </div>
+      <div id="pairMsg" class="msg"></div>
+    </div>
+
+    <div id="tab-qr" class="card hidden">
+      <h2>Connexion avec un QR code</h2>
+      <p class="muted">Pratique si ce site est ouvert sur un ordinateur : WhatsApp → Appareils connectés → Connecter un appareil, puis scanne le QR.</p>
+      <button id="qrBtn">Afficher le QR code</button>
+      <img id="qrImg" class="qr hidden" alt="QR code WhatsApp">
+      <div id="qrMsg" class="msg"></div>
+    </div>
+
+    <div id="tab-import" class="card hidden">
+      <h2>J'ai déjà un SESSION_ID</h2>
+      <p class="muted">Colle un SESSION_ID (il commence par <code>WAI~</code>) pour reconnecter le bot sans refaire l'appairage.</p>
+      <textarea id="importInput" placeholder="WAI~..."></textarea>
+      <button id="importBtn">Importer et se connecter</button>
+      <div id="importMsg" class="msg"></div>
+    </div>
+  </section>
+
+  <footer>Bot non officiel : utilise-le de façon responsable.<br><span id="storage"></span></footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id)
+const LABELS = {
+  idle: 'Non connecté', connecting: 'Connexion…', waiting_pair: 'En attente du code', waiting_qr: 'En attente du QR',
+  connected: 'Connecté', reconnecting: 'Reconnexion…', logged_out: 'Déconnecté', replaced: 'Ouvert ailleurs', error: 'Erreur',
+}
+const WAITING = ['connecting', 'waiting_pair', 'waiting_qr', 'reconnecting']
+const BAD = ['logged_out', 'replaced', 'error']
+const state = {
+  token: sessionStorage.getItem('pairToken') || '',
+  pwd: sessionStorage.getItem('adminPwd') || '',
+  st: null, sessionShown: false, timer: null, pairExpires: 0, pollTimer: null,
+}
+
+function msg(id, text, ok) {
+  const el = $(id)
+  el.textContent = text || ''
+  el.className = 'msg' + (text ? ' show ' + (ok ? 'ok' : 'err') : '')
+}
+function setToken(t) {
+  state.token = t || ''
+  if (t) sessionStorage.setItem('pairToken', t)
+  else sessionStorage.removeItem('pairToken')
+}
+function forgetPwd() {
+  state.pwd = ''
+  sessionStorage.removeItem('adminPwd')
+}
+
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = {}
+  if (body) headers['Content-Type'] = 'application/json'
+  if (state.pwd) headers['x-admin-password'] = encodeURIComponent(state.pwd)
+  if (state.token) headers['x-pair-token'] = state.token
+  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const err = new Error(data.error || 'Erreur ' + res.status)
+    err.status = res.status
+    if (res.status === 401) { forgetPwd(); setTimeout(refresh, 0) }
+    throw err
+  }
+  return data
+}
+
+function showCode(code, expiresAt) {
+  $('code').textContent = code
+  $('pairResult').classList.remove('hidden')
+  state.pairExpires = expiresAt || Date.now() + 180000
+  if (!state.timer) state.timer = setInterval(tick, 1000)
+  tick()
+}
+function tick() {
+  const left = Math.max(0, Math.round((state.pairExpires - Date.now()) / 1000))
+  $('timer').textContent = left
+    ? 'Code valable encore ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0')
+    : 'Code expiré : demande un nouveau code.'
+  if (!left) stopTimer()
+}
+function stopTimer() {
+  clearInterval(state.timer)
+  state.timer = null
+}
+
+async function loadSession() {
+  if (state.sessionShown) return
+  state.sessionShown = true
+  try {
+    const { sessionId } = await api('/api/session')
+    $('sessionId').value = sessionId
+    $('sessionBox').classList.remove('hidden')
+    $('showSession').classList.add('hidden')
+    msg('connMsg', '')
+  } catch (e) {
+    state.sessionShown = false
+    msg('connMsg', e.message)
+  }
+}
+
+function render(st) {
+  state.st = st
+  const name = st.botName || 'Bot'
+  $('title').textContent = name + ' — WhatsApp IA'
+  document.title = 'Connexion WhatsApp — ' + name
+  const badge = $('badge')
+  badge.textContent = LABELS[st.status] || st.status
+  badge.className = 'badge' + (st.connected ? ' ok' : WAITING.includes(st.status) ? ' wait' : BAD.includes(st.status) ? ' err' : '')
+  $('storage').textContent = st.storage === 'mongodb' ? 'Stockage : MongoDB ✅' : 'Stockage : fichier local (garde ton SESSION_ID à jour sur Render)'
+  const linked = st.connected || (st.hasSession && ['connecting', 'reconnecting'].includes(st.status))
+  const needPwd = st.needsPassword && !state.pwd
+  $('pwdCard').classList.toggle('hidden', !needPwd)
+  $('connectedCard').classList.toggle('hidden', !linked)
+  $('pairCard').classList.toggle('hidden', linked || needPwd)
+  if (linked) {
+    stopTimer()
+    $('who').textContent = st.me ? 'Compte : ' + [st.me.name, st.me.number].filter(Boolean).join(' • ') : 'Reconnexion en cours…'
+    $('logoutBtn').classList.toggle('hidden', !(st.needsPassword && state.pwd))
+    $('noPwdHint').classList.toggle('hidden', st.needsPassword)
+    $('showSession').classList.toggle('hidden', state.sessionShown || !st.connected || !(state.pwd || st.sessionAvailable))
+    if (st.sessionAvailable) loadSession()
+    return
+  }
+  state.sessionShown = false
+  $('sessionBox').classList.add('hidden')
+  if (st.pairing && st.pairing.code) showCode(st.pairing.code, st.pairing.expiresAt)
+  if (st.qr) {
+    $('qrImg').src = st.qr
+    $('qrImg').classList.remove('hidden')
+  } else if (st.status !== 'waiting_qr') {
+    $('qrImg').classList.add('hidden')
+  }
+  msg('statusMsg', BAD.includes(st.status) || st.status === 'idle' ? st.lastError || '' : '')
+}
+
+async function refresh() {
+  clearTimeout(state.pollTimer)
+  try {
+    render(await api('/api/status'))
+  } catch {
+    $('badge').textContent = 'Hors ligne'
+    $('badge').className = 'badge err'
+  }
+  state.pollTimer = setTimeout(refresh, state.st && state.st.connected ? 10000 : 3000)
+}
+
+async function copy(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    ta.remove()
+  }
+  const old = btn.textContent
+  btn.textContent = '✅ Copié !'
+  setTimeout(() => { btn.textContent = old }, 1500)
+}
+
+$('pwdBtn').onclick = async () => {
+  const pwd = $('pwd').value
+  if (!pwd) return msg('pwdMsg', 'Entre le mot de passe.')
+  $('pwdBtn').disabled = true
+  try {
+    const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pwd }) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Mot de passe incorrect.')
+    state.pwd = pwd
+    sessionStorage.setItem('adminPwd', pwd)
+    $('pwd').value = ''
+    msg('pwdMsg', '')
+    refresh()
+  } catch (e) {
+    msg('pwdMsg', e.message)
+  } finally {
+    $('pwdBtn').disabled = false
+  }
+}
+$('pwd').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pwdBtn').click() })
+
+$('pairBtn').onclick = async () => {
+  const phone = $('phone').value.replace(/\D/g, '')
+  if (phone.length < 8) return msg('pairMsg', 'Numéro invalide : indicatif du pays + numéro, par exemple 33612345678.')
+  const btn = $('pairBtn')
+  btn.disabled = true
+  btn.textContent = "Demande en cours… (jusqu'à 45 s)"
+  msg('pairMsg', '')
+  try {
+    const r = await api('/api/pair', { method: 'POST', body: { phone } })
+    setToken(r.token)
+    showCode(r.code, r.expiresAt)
+    msg('pairMsg', 'Code prêt ! Saisis-le vite dans WhatsApp.', true)
+  } catch (e) {
+    msg('pairMsg', e.message)
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Obtenir un nouveau code'
+  }
+}
+$('phone').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pairBtn').click() })
+$('copyCode').onclick = () => copy($('code').textContent.replace(/-/g, ''), $('copyCode'))
+
+$('qrBtn').onclick = async () => {
+  const btn = $('qrBtn')
+  btn.disabled = true
+  msg('qrMsg', '')
+  try {
+    const r = await api('/api/qr', { method: 'POST' })
+    setToken(r.token)
+    $('qrImg').src = r.qr
+    $('qrImg').classList.remove('hidden')
+    msg('qrMsg', 'Scanne le QR avec WhatsApp. Il se renouvelle automatiquement.', true)
+  } catch (e) {
+    msg('qrMsg', e.message)
+  } finally {
+    btn.disabled = false
+  }
+}
+
+$('importBtn').onclick = async () => {
+  const sessionId = $('importInput').value.trim()
+  if (!sessionId) return msg('importMsg', 'Colle ton SESSION_ID.')
+  $('importBtn').disabled = true
+  try {
+    await api('/api/import', { method: 'POST', body: { sessionId } })
+    $('importInput').value = ''
+    msg('importMsg', 'Session importée, connexion en cours…', true)
+    refresh()
+  } catch (e) {
+    msg('importMsg', e.message)
+  } finally {
+    $('importBtn').disabled = false
+  }
+}
+
+$('showSession').onclick = () => loadSession()
+$('copySession').onclick = () => copy($('sessionId').value, $('copySession'))
+$('logoutBtn').onclick = async () => {
+  if (!confirm("Déconnecter ce WhatsApp du bot ? Il faudra refaire l'appairage et remplacer SESSION_ID sur Render.")) return
+  try {
+    await api('/api/logout', { method: 'POST' })
+    state.sessionShown = false
+    $('sessionBox').classList.add('hidden')
+    setToken('')
+    refresh()
+  } catch (e) {
+    msg('connMsg', e.message)
+  }
+}
+
+document.querySelectorAll('.tabs button').forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b === btn))
+    for (const t of ['code', 'qr', 'import']) $('tab-' + t).classList.toggle('hidden', t !== btn.dataset.tab)
+  }
+})
+
+refresh()
+</script>
+</body>
+</html>
