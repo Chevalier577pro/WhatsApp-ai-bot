@@ -9,14 +9,16 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 - 🔑 **SESSION_ID** : le bot se reconnecte tout seul après chaque redémarrage.
 - 🤖 **`.ai`** : un assistant IA répond aux messages de la discussion où tu l'actives.
 - 🪞 **`.meai`** : l'IA répond **à ta place**, avec ton style (et se tait si tu réponds toi-même).
+- 🙋 **`.aai`** : l'IA te répond **aussi à toi** dans une discussion ou un groupe où `.ai` ou `.meai` est actif.
 - 💬 **IA privée** : active `.ai` dans ta discussion « Moi » pour discuter avec ton IA.
 - 📋 **Menu numéroté** (`.menu`, options 1 à 18 et 0) : tout se règle en répondant par un numéro.
+- 📖 **`.help`** : la liste de toutes les commandes avec leurs explications.
 - 🧠 **Choix du modèle** parmi tous les modèles NVIDIA (liste paginée, recherche, test automatique).
 - 🔒 **Commandes réservées au propriétaire** : seuls TES messages sont lus comme des commandes.
 - 🕶️ **Mode discret** : tes commandes sont effacées et les réponses arrivent dans ta discussion « Moi ».
 - 👥 **Groupes** : réponse à tous les messages ou seulement quand on te mentionne.
 - 🧩 Mémoire par discussion, personnalité, consignes perso, température, délai de réponse, signature…
-- ☁️ **Prêt pour GitHub + Render** (`render.yaml` inclus), avec MongoDB en option pour tout conserver.
+- ☁️ **Prêt pour GitHub + Render** (`render.yaml` inclus) : fonctionne **sans base de données** (MongoDB en option).
 
 ## 🚀 Installation gratuite en 5 étapes
 
@@ -25,16 +27,16 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 1. Crée un compte sur [build.nvidia.com](https://build.nvidia.com).
 2. Ouvre un modèle (par exemple *Nemotron 3 Ultra*) → **Get API Key** → copie la clé (`nvapi-…`).
 
-### 2. Base MongoDB gratuite (recommandé)
+### 2. Base de données (facultatif)
 
-Sur l'offre gratuite de Render, le disque est **effacé à chaque redémarrage**. Avec MongoDB, la session, les réglages et la mémoire sont conservés.
+Le bot fonctionne **sans base de données** : la session WhatsApp revient toute seule grâce à `SESSION_ID`.
+Sur l'offre gratuite de Render, le disque est **effacé à chaque redémarrage** (redéploiement, mise à jour du code…) : les réglages, les discussions actives (`.ai`, `.meai`, `.aai`) et la mémoire repartent alors à zéro. Pour tout garder, ajoute une base MongoDB gratuite :
 
 1. Crée un cluster gratuit **M0** sur [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
 2. **Database Access** : crée un utilisateur et un mot de passe.
 3. **Network Access** : ajoute `0.0.0.0/0` (Render n'a pas d'adresse IP fixe).
 4. **Connect → Drivers** : copie l'adresse `mongodb+srv://…` en remplaçant `<db_password>` par ton mot de passe.
-
-> Sans MongoDB, ça marche aussi : garde simplement la variable `SESSION_ID` à jour (tes réglages et la mémoire seront remis à zéro à chaque redémarrage).
+5. Sur Render : **Environment → Add Environment Variable** → `MONGODB_URI` = cette adresse.
 
 ### 3. Mettre le code sur GitHub
 
@@ -61,7 +63,6 @@ Tu peux aussi glisser-déposer les fichiers sur github.com (**Add file → Uploa
 |---|---|
 | `NVIDIA_API_KEY` | ta clé NVIDIA (**obligatoire**) |
 | `ADMIN_PASSWORD` | un mot de passe pour protéger le site (**fortement recommandé**) |
-| `MONGODB_URI` | ton adresse MongoDB (recommandé, sinon laisse vide) |
 | `OWNER_NAME` | ton prénom (utile pour le mode `.meai`) |
 | `BOT_NAME` | le nom de l'assistant (par défaut « Nova ») |
 | `SESSION_ID` | laisse vide pour l'instant |
@@ -80,7 +81,7 @@ Tu peux aussi glisser-déposer les fichiers sur github.com (**Add file → Uploa
 ## 💬 Utilisation
 
 Toutes les commandes commencent par `.` et ne marchent **que depuis ton compte** : les messages de tes contacts ne sont jamais lus comme des commandes.
-Le plus simple : envoie **`.menu`** dans ta discussion « Moi » (ou dans n'importe quelle discussion), puis réponds par un numéro.
+Le plus simple : envoie **`.menu`** dans ta discussion « Moi » (ou dans n'importe quelle discussion), puis réponds par un numéro. Pour voir toutes les commandes avec leurs explications : **`.help`**.
 
 ### Le menu `.menu`
 
@@ -113,9 +114,11 @@ Pour le modèle : un **numéro** pour choisir, **+** pour la page suivante, ou u
 
 | Commande | Effet |
 |---|---|
+| `.help` | Liste des commandes avec leurs explications |
 | `.menu` | Ouvre le menu numéroté |
 | `.ai` · `.ai off` | Active · coupe l'assistant IA dans la discussion |
 | `.meai` · `.meai off` | L'IA répond à ta place, dans ton style |
+| `.aai` · `.aai off` | L'IA te répond aussi à toi dans la discussion (`.ai` ou `.meai` doit être actif) |
 | `.stop` · `.stopall` | Coupe l'IA ici · partout |
 | `.actifs` | Discussions où l'IA est active |
 | `.ask <question>` | L'IA répond directement dans la discussion |
@@ -137,13 +140,13 @@ Pour le modèle : un **numéro** pour choisir, **+** pour la page suivante, ou u
 | `.reflexion on/off` | Mode réflexion (modèles compatibles) |
 | `.reglages` · `.reinit` | Voir · remettre par défaut les réglages |
 | `.statut` · `.session` · `.ping` | Statut du bot · ton SESSION_ID · test de vie |
-| `.commandes` | Liste de toutes les commandes |
 
-### `.ai` ou `.meai` ?
+### `.ai`, `.meai` et `.aai`
 
 - **`.ai`** : un assistant (« Nova ») répond aux messages reçus dans la discussion et se présente comme une IA. Dans ta discussion « Moi », c'est ton IA privée.
 - **`.meai`** : l'IA répond **en se faisant passer pour toi**, dans ton style. Elle attend le délai choisi (`.delai`, 2 s par défaut) : si tu réponds toi-même avant, elle ne dit rien.
 - Les deux modes ne peuvent pas être actifs en même temps dans une discussion.
+- **`.aai`** : en plus, l'IA **te répond à toi**. Exemple : tu envoies « salut » à un pote, l'IA te répond dans la même discussion (en citant ton message). Ça marche aussi en groupe. Il faut que `.ai` ou `.meai` soit déjà actif ; `.stop` coupe tout.
 
 💡 Pour des réponses `.meai` crédibles, décris-toi avec `.prompt` : âge, ville, études ou métier, centres d'intérêt, façon d'écrire (emojis, abréviations…).
 
@@ -158,7 +161,7 @@ Quand tu tapes une commande dans une discussion, elle est **supprimée pour tout
 | `NVIDIA_API_KEY` | Clé API NVIDIA (**obligatoire**) | — |
 | `ADMIN_PASSWORD` | Mot de passe du site d'appairage | — |
 | `SESSION_ID` | Session WhatsApp (après l'appairage) | — |
-| `MONGODB_URI` | Stockage MongoDB (session, réglages, mémoire) | — |
+| `MONGODB_URI` | Facultatif : base MongoDB pour garder réglages et mémoire | — |
 | `MONGODB_DB` | Nom de la base MongoDB | `whatsapp_ai_bot` |
 | `NVIDIA_MODEL` | Modèle utilisé au départ | `nvidia/nemotron-3-ultra-550b-a55b` |
 | `NVIDIA_BASE_URL` | Adresse de l'API NVIDIA | `https://integrate.api.nvidia.com/v1` |
@@ -199,9 +202,10 @@ L'offre gratuite donne 750 heures par mois, assez pour un service allumé 24 h/2
 | Statut « Déconnecté » | L'appareil a été retiré dans WhatsApp : refais l'appairage puis remplace `SESSION_ID` sur Render. |
 | Statut « Ouvert ailleurs » | Le même SESSION_ID tourne à deux endroits (autre service, ton PC…) : n'en garde qu'un seul. |
 | L'IA ne répond pas | Vérifie `NVIDIA_API_KEY`, puis teste avec `.test` (option 16). Les erreurs arrivent dans ta discussion « Moi ». |
+| « Active d'abord .ai ou .meai » | `.aai` a besoin que `.ai` ou `.meai` soit déjà actif dans la discussion. |
 | Modèle indisponible (erreur 404) | Choisis-en un autre avec `.models` (option 5). |
 | Erreur 429 | Trop de requêtes pour ta clé NVIDIA : patiente un peu ou augmente le délai (`.delai`). |
-| Réglages perdus après un redémarrage | Ajoute `MONGODB_URI` : le disque gratuit de Render est effacé à chaque redémarrage. |
+| Réglages perdus après un redémarrage | Normal sans base de données : le disque gratuit de Render est effacé à chaque redémarrage. Réactive `.ai` / `.meai` / `.aai`, ou ajoute `MONGODB_URI` pour tout garder. |
 
 ## 📁 Structure du projet
 

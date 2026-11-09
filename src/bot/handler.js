@@ -112,9 +112,16 @@ export class Bot {
   }
 
   activeList() {
-    const { ai, meai } = this.settings.activeChats()
+    const { ai, meai, aai } = this.settings.activeChats()
     const dedupe = (ids) => [...new Set(ids.map((id) => this.resolveAlias(id)))]
-    return { ai: dedupe(ai), meai: dedupe(meai) }
+    return { ai: dedupe(ai), meai: dedupe(meai), aai: dedupe(aai) }
+  }
+
+  /** L'IA peut-elle répondre ? .aai (te répondre aussi à toi) exige .ai ou .meai actif dans la discussion. */
+  canReply(ids, mode) {
+    const modes = this.activeModes(ids)
+    if (mode === 'aai') return modes.length > 0 && this.settings.isActive('aai', ids)
+    return modes.includes(mode)
   }
 
   // ---------- menu : réponses attendues ----------
@@ -166,7 +173,7 @@ export class Bot {
       'Le message suivant contient ton *SESSION_ID*. Garde-le secret : il donne accès à ton compte.',
       '👉 Colle-le dans la variable *SESSION_ID* de ton service Render pour que le bot se reconnecte tout seul après chaque redémarrage.',
       '',
-      `Tape *${this.prefix}menu* ici pour voir toutes les options.`,
+      `Tape *${this.prefix}help* ici pour voir toutes les commandes (ou *${this.prefix}menu* pour le menu numéroté).`,
     ].join('\n')
     await this.wa.send(self, { text: intro }).catch(() => {})
     await this.wa.send(self, { text: sessionId }).catch(() => {})
@@ -226,8 +233,10 @@ export class Bot {
     if (!modes.length) return
     this.memory.add(chat, { r: 'me', text: describe(ctx.content) })
     // Dans ta discussion perso (« Moi ») avec .ai actif : tu discutes en privé avec ton IA
-    if (ctx.self && modes.includes('ai') && text && ctx.fresh) this.schedule(ctx, 'ai', 0)
-    else this.cancel(chat) // tu as répondu toi-même : on annule la réponse automatique
+    if (ctx.self && modes.includes('ai') && text && ctx.fresh) return this.schedule(ctx, 'ai', 0)
+    this.cancel(chat) // tu as répondu toi-même : on annule la réponse automatique prévue
+    // .aai : l'IA te répond aussi à toi, dans cette discussion (privée ou groupe)
+    if (!ctx.self && text && ctx.fresh && this.canReply(ctx.ids, 'aai')) this.schedule(ctx, 'aai')
   }
 
   /** Message reçu d'un contact ou d'un groupe. */
@@ -296,25 +305,27 @@ export class Bot {
       this.again.set(chat, { ctx, mode })
       return
     }
-    if (!this.wa.connected || !this.activeModes(ctx.ids).includes(mode)) return
+    if (!this.wa.connected || !this.canReply(ctx.ids, mode)) return
     const history = this.memory.get(chat)
     const last = history[history.length - 1]
-    // On ne répond que si le dernier message vient de l'interlocuteur (ou de toi dans ta discussion perso)
-    if (!last || !(last.r === 'them' || (ctx.self && last.r === 'me'))) return
+    // On répond au dernier message : celui de l'interlocuteur, ou le tien (discussion « Moi » ou .aai)
+    const toOwner = ctx.self || mode === 'aai'
+    if (!last || last.r !== (toOwner ? 'me' : 'them')) return
     this.busy.add(chat)
     try {
       await this.wa.presence(chat, 'composing')
       const info = await this.chatInfo(ctx)
       const res = await this.ai.reply({ mode, history, chat: info, ownerName: this.ownerName() })
       const newer = this.memory.get(chat).filter((e) => e.ts > last.ts)
-      if (!ctx.self && newer.some((e) => e.r === 'me')) return // tu as répondu toi-même entre-temps
-      if (!this.activeModes(ctx.ids).includes(mode)) return // mode désactivé entre-temps
+      if (!ctx.self && newer.some((e) => e.r === 'me')) return // tu as écrit entre-temps
+      if (!this.canReply(ctx.ids, mode)) return // mode désactivé entre-temps
       let text = res.text
       if (mode === 'meai') await sleep(Math.min(4000, 500 + text.length * 25)) // temps de frappe réaliste
-      if (mode === 'ai' && this.settings.get('signature')) text += `\n\n_— ${this.settings.get('botName')} 🤖_`
-      const quoted = ctx.isGroup ? this.lastIncoming.get(chat) : undefined
+      if (mode !== 'meai' && this.settings.get('signature')) text += `\n\n_— ${this.settings.get('botName')} 🤖_`
+      // .aai : l'IA cite ton message pour montrer qu'elle te répond à toi
+      const quoted = mode === 'aai' ? ctx.msg : ctx.isGroup ? this.lastIncoming.get(chat) : undefined
       await this.wa.send(chat, { text }, quoted ? { quoted } : {})
-      this.memory.addAfter(chat, { r: 'bot', text: res.text }, last.ts)
+      this.memory.addAfter(chat, { r: 'bot', mode, text: res.text }, last.ts)
     } catch (err) {
       await this.notifyError(err, ctx)
     } finally {

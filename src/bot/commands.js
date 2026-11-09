@@ -48,6 +48,7 @@ export function createCommands(bot) {
       if (settings.isActive(other, t.ids)) settings.setActive(other, t.ids, false) // un seul mode à la fois
     } else {
       bot.cancel(t.chat)
+      if (!bot.activeModes(t.ids).length) settings.setActive('aai', t.ids, false) // .aai a besoin de .ai ou .meai
     }
     const title = mode === 'ai' ? `🤖 Assistant IA (${settings.get('botName')})` : '🪞 Réponse à ta place'
     let extra = ''
@@ -64,6 +65,7 @@ export function createCommands(bot) {
   async function stopHere({ t, say }) {
     settings.setActive('ai', t.ids, false)
     settings.setActive('meai', t.ids, false)
+    settings.setActive('aai', t.ids, false)
     bot.cancel(t.chat)
     return say('⛔ IA désactivée dans cette discussion.')
   }
@@ -71,12 +73,13 @@ export function createCommands(bot) {
   async function stopAll({ say }) {
     settings.clearMode('ai')
     settings.clearMode('meai')
+    settings.clearMode('aai')
     bot.cancelAll()
     return say('⛔ IA désactivée dans *toutes* les discussions.')
   }
 
   async function listActive({ say }) {
-    const { ai: aiChats, meai: meaiChats } = bot.activeList()
+    const { ai: aiChats, meai: meaiChats, aai: aaiChats } = bot.activeList()
     const fmt = (ids) => (ids.length ? ids.map((id) => `- ${bot.label(id)}`).join('\n') : '- _aucune_')
     return say(
       [
@@ -87,8 +90,29 @@ export function createCommands(bot) {
         '',
         `🪞 *À ta place* (${meaiChats.length})`,
         fmt(meaiChats),
+        '',
+        `🙋 *L'IA te répond aussi* (${aaiChats.length})`,
+        fmt(aaiChats),
       ].join('\n'),
     )
+  }
+
+  /** .aai : l'IA te répond aussi à toi dans cette discussion (il faut .ai ou .meai déjà actif). */
+  async function toggleAai({ t, arg, say }) {
+    if (t.self) {
+      return say(`🙋 *${P}aai* sert dans une discussion avec quelqu'un (privée ou groupe).\nIci, *${P}ai* te répond déjà en privé.`)
+    }
+    const wanted = parseSwitch(arg)
+    const on = wanted === null ? !settings.isActive('aai', t.ids) : wanted
+    if (on && !bot.activeModes(t.ids).length) {
+      return say(`❌ Active d'abord *${P}ai* ou *${P}meai* dans cette discussion, puis tape *${P}aai*.`)
+    }
+    settings.setActive('aai', t.ids, on)
+    const extra = on
+      ? `\nQuand tu écris ici, l'IA te répond aussi, en citant ton message. *${P}aai off* pour arrêter.`
+      : "\nL'IA ne répond plus à tes propres messages ici."
+    const warn = on && !ai.client.configured ? "\n⚠️ NVIDIA_API_KEY manquante : l'IA ne pourra pas répondre." : ''
+    return say(`🙋 L'IA te répond aussi : *${on ? 'activé ✅' : 'désactivé ⛔'}*${extra}${warn}`)
   }
 
   // ---------- modèles ----------
@@ -367,7 +391,7 @@ export function createCommands(bot) {
 
   async function status({ say }) {
     const s = settings.all()
-    const { ai: a, meai: m } = bot.activeList()
+    const { ai: a, meai: m, aai: x } = bot.activeList()
     const st = wa.publicStatus()
     return say(
       [
@@ -375,9 +399,9 @@ export function createCommands(bot) {
         `- WhatsApp : ${st.connected ? 'connecté ✅' : st.status}${wa.me?.number ? ` (+${wa.me.number})` : ''}`,
         `- Modèle : ${s.model}`,
         `- Clé NVIDIA : ${ai.client.configured ? 'configurée ✅' : 'manquante ❌'}`,
-        `- Discussions actives : ${a.length} assistant • ${m.length} à ta place`,
+        `- Discussions actives : ${a.length} assistant • ${m.length} à ta place • ${x.length} avec ${P}aai`,
         `- Conversations en mémoire : ${memory.count()}`,
-        `- Stockage : ${bot.kv.kind === 'mongodb' ? 'MongoDB ✅' : 'fichier local ⚠️ (effacé à chaque redémarrage sur Render : garde ton SESSION_ID à jour)'}`,
+        `- Stockage : ${bot.kv.kind === 'mongodb' ? 'MongoDB ✅' : 'fichier local (sans base de données : réglages remis à zéro à chaque redémarrage, la session revient grâce au SESSION_ID)'}`,
         `- En ligne depuis : ${formatDuration(Date.now() - bot.startedAt)}`,
         `- Node ${process.version} • RAM ${Math.round(process.memoryUsage().rss / 1048576)} Mo`,
       ].join('\n'),
@@ -416,32 +440,49 @@ export function createCommands(bot) {
     return say(`🏓 Pong ! En ligne depuis ${formatDuration(Date.now() - bot.startedAt)}.`)
   }
 
+  /** .help : toutes les commandes avec leurs explications (sans menu). */
   async function commandList({ say }) {
     return say(
       [
-        `📖 *Commandes* (préfixe ${P})`,
+        `📖 *Commandes de ${settings.get('botName')}* — toi seul peux les utiliser`,
         '',
-        '*IA*',
-        `${P}ai [on/off] — assistant IA dans cette discussion`,
-        `${P}meai [on/off] — l'IA répond à ta place`,
-        `${P}stop — désactiver l'IA ici • ${P}stopall — partout`,
+        '*🤖 IA dans une discussion*',
+        `${P}ai [on/off] — l'assistant IA répond aux messages reçus ici (dans « Moi » : ton IA privée)`,
+        `${P}meai [on/off] — l'IA répond à ta place, avec ton style`,
+        `${P}aai [on/off] — l'IA te répond aussi à toi ici, même en groupe (${P}ai ou ${P}meai doit être actif)`,
+        `${P}stop — coupe l'IA dans cette discussion`,
+        `${P}stopall — coupe l'IA partout`,
         `${P}actifs — discussions où l'IA est active`,
-        `${P}ask <question> — réponse de l'IA ici même`,
-        `${P}test [question] — tester l'IA en privé`,
-        `${P}reset [tout] — effacer la mémoire`,
+        `${P}ask <question> — l'IA répond à ta question dans cette discussion`,
+        `${P}reset — efface la mémoire de cette discussion (${P}reset tout : toutes)`,
         '',
-        '*Réglages*',
-        `${P}models [page/mot] • ${P}model <n°/nom>`,
-        `${P}perso <texte> • ${P}prompt <texte>`,
-        `${P}owner <prénom> • ${P}nom <nom du bot>`,
-        `${P}temp <0-2> • ${P}tokens <64-8192>`,
-        `${P}memoire <2-100> • ${P}delai <0-120>`,
-        `${P}groupes tout/mention`,
-        `${P}discret on/off • ${P}signature on/off • ${P}reflexion on/off`,
-        `${P}reglages • ${P}reinit`,
+        '*🧠 Modèle IA*',
+        `${P}models [page ou mot] — liste des modèles NVIDIA, par pages ou par recherche`,
+        `${P}model <numéro ou nom> — choisir le modèle`,
+        `${P}test [question] — tester l'IA et son temps de réponse`,
+        `${P}reflexion on/off — l'IA réfléchit avant de répondre (plus lent)`,
         '',
-        '*Compte*',
-        `${P}statut • ${P}session • ${P}ping • ${P}menu`,
+        '*⚙️ Réglages*',
+        `${P}owner <prénom> — ton prénom, utilisé par l'IA`,
+        `${P}nom <nom> — nom du bot`,
+        `${P}perso <texte> — personnalité de l'IA`,
+        `${P}prompt <texte> — consignes perso (qui tu es, ta façon d'écrire…)`,
+        `${P}temp <0-2> — créativité des réponses`,
+        `${P}tokens <64-8192> — longueur max des réponses`,
+        `${P}memoire <2-100> — nombre de messages retenus par discussion`,
+        `${P}delai <0-120> — secondes d'attente avant de répondre`,
+        `${P}groupes tout/mention — en groupe : répondre à tout, ou seulement quand on te mentionne`,
+        `${P}discret on/off — efface tes commandes et répond dans « Moi »`,
+        `${P}signature on/off — signe les réponses de l'assistant`,
+        `${P}reglages — voir tous les réglages`,
+        `${P}reinit — remettre les réglages par défaut`,
+        '',
+        '*🔑 Compte*',
+        `${P}statut — état du bot`,
+        `${P}session — recevoir ton SESSION_ID dans « Moi »`,
+        `${P}ping — vérifier que le bot répond`,
+        `${P}menu — menu numéroté`,
+        `${P}help — cette liste`,
       ].join('\n'),
     )
   }
@@ -475,9 +516,10 @@ export function createCommands(bot) {
   function menuText(t) {
     const s = settings.all()
     const state = settings.isActive('meai', t.ids) ? '🪞 à ta place' : settings.isActive('ai', t.ids) ? '🤖 assistant' : '💤 inactive'
+    const aai = settings.isActive('aai', t.ids) ? ' + 🙋 te répond aussi' : ''
     return [
       `*${s.botName} — Menu*`,
-      `📍 Discussion : _${bot.label(t.chat)}_ • IA : ${state}`,
+      `📍 Discussion : _${bot.label(t.chat)}_ • IA : ${state}${aai}`,
       `🧠 ${s.model}`,
       '',
       ...MENU.map(([n, e, l]) => `*${n}.* ${e} ${l}`),
@@ -640,14 +682,15 @@ export function createCommands(bot) {
 
   const COMMANDS = {
     menu,
-    aide: menu,
-    help: menu,
+    help: commandList,
+    aide: commandList,
     commandes: commandList,
     cmds: commandList,
     commands: commandList,
     ai: (a) => toggleMode(a, 'ai'),
     ia: (a) => toggleMode(a, 'ai'),
     meai: (a) => toggleMode(a, 'meai'),
+    aai: toggleAai,
     stop: stopHere,
     stopall: stopAll,
     actifs: listActive,

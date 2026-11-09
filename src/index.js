@@ -22,7 +22,7 @@ async function main() {
   })
   logger.info(`💾 Stockage : ${kv.kind === 'mongodb' ? 'MongoDB' : 'fichier local'}`)
   if (kv.kind !== 'mongodb' && process.env.RENDER) {
-    logger.warn('Sans MONGODB_URI, les données sont effacées à chaque redémarrage sur Render : garde la variable SESSION_ID à jour.')
+    logger.info('Sans base de données : réglages, discussions actives et mémoire repartent à zéro à chaque redémarrage sur Render. La session WhatsApp revient grâce à SESSION_ID.')
   }
 
   const settings = new Settings(kv)

@@ -16,13 +16,14 @@ export const DEFAULT_SETTINGS = () => ({
   reasoning: false,
 })
 
-/** Réglages de l'IA + conversations où .ai / .meai sont actifs (persistés dans le KVStore). */
+/** Réglages de l'IA + conversations où .ai / .meai / .aai sont actifs (persistés dans le KVStore). */
 export class Settings {
   constructor(kv) {
     this.kv = kv
     this.data = { ...DEFAULT_SETTINGS(), ...(kv.get('settings') || {}) }
     this.aiChats = new Set(kv.get('aiChats') || [])
     this.meaiChats = new Set(kv.get('meaiChats') || [])
+    this.aaiChats = new Set(kv.get('aaiChats') || []) // .aai : l'IA te répond aussi à toi
   }
 
   get(key) {
@@ -53,11 +54,14 @@ export class Settings {
   }
 
   #set(mode) {
-    return mode === 'meai' ? this.meaiChats : this.aiChats
+    if (mode === 'meai') return this.meaiChats
+    if (mode === 'aai') return this.aaiChats
+    return this.aiChats
   }
 
   #persist(mode) {
-    this.kv.set(mode === 'meai' ? 'meaiChats' : 'aiChats', [...this.#set(mode)])
+    const key = mode === 'meai' ? 'meaiChats' : mode === 'aai' ? 'aaiChats' : 'aiChats'
+    this.kv.set(key, [...this.#set(mode)])
   }
 
   /** ids = toutes les formes connues de la conversation (JID numéro + JID LID). */
@@ -82,6 +86,6 @@ export class Settings {
   }
 
   activeChats() {
-    return { ai: [...this.aiChats], meai: [...this.meaiChats] }
+    return { ai: [...this.aiChats], meai: [...this.meaiChats], aai: [...this.aaiChats] }
   }
 }

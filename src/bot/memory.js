@@ -1,6 +1,7 @@
 /**
  * Mémoire des conversations (persistée dans le KVStore sous "mem:<discussion>").
  * rôles : 'them' = l'interlocuteur | 'me' = toi (message tapé à la main) | 'bot' = réponse de l'IA
+ * m (réponses 'bot' uniquement) : mode utilisé ('ai', 'meai' ou 'aai')
  */
 const MAX_TEXT = 2000
 
@@ -41,6 +42,7 @@ export class Memory {
     const ts = index < list.length ? afterTs + 1 : Date.now()
     const item = { r: entry.r, t: String(entry.text).slice(0, MAX_TEXT), ts }
     if (entry.name) item.n = String(entry.name).slice(0, 60)
+    if (entry.mode) item.m = String(entry.mode)
     list.splice(index, 0, item)
     this.kv.set(this.#key(chat), list.slice(-this.#limit()))
   }

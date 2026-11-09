@@ -183,6 +183,35 @@ await test('Moteur IA : prompt système et nettoyage de la réponse', async () =
   await kv.close()
 })
 
+await test("Moteur IA : mode .aai (l'IA te répond à toi)", async () => {
+  const kv = await newKv('engine-aai')
+  const settings = new Settings(kv)
+  let seen
+  const client = {
+    configured: true,
+    chat: async (args) => {
+      seen = args
+      return { text: '[Nova] Salut Alex !', model: args.model }
+    },
+  }
+  const engine = new AIEngine({ client, settings, timeZone: 'Europe/Paris' })
+  const mem = new Memory(kv)
+  const chat = 'bob@s.whatsapp.net'
+  mem.add(chat, { r: 'them', text: 'Tu viens ce soir ?', name: 'Bob' })
+  mem.add(chat, { r: 'bot', mode: 'meai', text: 'Je te redis ça !' })
+  mem.add(chat, { r: 'me', text: 'Salut' })
+  assert.equal(mem.get(chat)[1].m, 'meai')
+  const res = await engine.reply({ mode: 'aai', history: mem.get(chat), chat: { isGroup: false, name: 'Bob' }, ownerName: 'Alex' })
+  assert.equal(res.text, 'Salut Alex !')
+  assert.match(seen.messages[0].content, /lui répondre à lui aussi/)
+  const users = seen.messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n')
+  assert.ok(users.includes('[Bob] Tu viens ce soir ?'), users)
+  assert.ok(users.includes('[Alex] Je te redis ça !'), 'une réponse .meai compte comme un message de toi')
+  assert.ok(users.includes('[Alex] Salut'), users)
+  assert.equal(seen.messages.at(-1).role, 'user')
+  await kv.close()
+})
+
 await test('Commandes : interrupteurs et durées', () => {
   assert.equal(parseSwitch('on'), true)
   assert.equal(parseSwitch('off'), false)
@@ -347,6 +376,83 @@ await test('Bot : commandes du propriétaire, menu et réponses IA', async () =>
   const page = wa.sent.at(-1).text
   assert.match(page, /page 1\/2/)
   assert.ok(page.includes('org/modele-15') && !page.includes('org/modele-16'))
+
+  await kv.close()
+})
+
+await test("Bot : .aai (l'IA te répond aussi) et .help sans menu", async () => {
+  const kv = await newKv('bot-aai')
+  const settings = new Settings(kv)
+  settings.set('replyDelay', 0)
+  const wa = new FakeWA()
+  const bot = new Bot({ wa, kv, settings, ai: fakeAI, config: { prefix: '.', botName: 'Nova', ownerName: '' }, log: silent })
+  const friend = '33622222222@s.whatsapp.net'
+  const group = '120363000000000001@g.us'
+  const self = wa.me.id
+  const up = async (msg, wait = 40) => {
+    await bot.onUpsert({ messages: [msg], type: 'notify' })
+    await sleep(wait)
+  }
+  const sentSince = (n, jid) => wa.sent.slice(n).filter((s) => s.jid === jid)
+
+  // .help : la liste des commandes avec leurs explications, sans menu
+  await up(incoming(self, '.help', { fromMe: true }))
+  const help = wa.sent.at(-1).text
+  assert.ok(help.includes('.aai') && help.includes('.meai'), help)
+  assert.doesNotMatch(help, /Réponds avec un numéro/)
+  assert.equal(bot.getPending(self), null, '.help ne doit pas ouvrir le menu')
+
+  // .aai refusé tant que .ai ou .meai n'est pas actif
+  await up(incoming(friend, '.aai', { fromMe: true }))
+  assert.equal(settings.isActive('aai', [friend]), false)
+  assert.match(wa.sent.at(-1).text, /Active d'abord/)
+
+  // .ai seul : tes propres messages ne déclenchent pas l'IA
+  await up(incoming(friend, '.ai', { fromMe: true }))
+  let n = wa.sent.length
+  await up(incoming(friend, 'Salut !', { fromMe: true }), 150)
+  assert.equal(sentSince(n, friend).length, 0)
+
+  // .ai + .aai : l'IA te répond dans la même discussion, en citant ton message
+  await up(incoming(friend, '.aai', { fromMe: true }))
+  assert.ok(settings.isActive('aai', [friend]))
+  n = wa.sent.length
+  const mine = incoming(friend, 'Salut !', { fromMe: true })
+  await up(mine, 150)
+  const replies = sentSince(n, friend)
+  assert.deepEqual(replies.map((s) => s.text), ['Réponse IA'])
+  assert.equal(replies[0].options.quoted?.key?.id, mine.key.id)
+  assert.equal(fakeAI.calls.at(-1).mode, 'aai')
+
+  // la réponse envoyée par le bot ne relance pas l'IA (pas de boucle)
+  n = wa.sent.length
+  const echo = incoming(friend, 'Réponse IA', { fromMe: true })
+  echo.key.id = [...wa.botIds].at(-1)
+  await up(echo, 150)
+  assert.equal(sentSince(n, friend).length, 0)
+
+  // ton ami écrit : l'assistant lui répond toujours
+  n = wa.sent.length
+  await up(incoming(friend, 'Et toi ?'), 150)
+  assert.equal(sentSince(n, friend).length, 1)
+  assert.equal(fakeAI.calls.at(-1).mode, 'ai')
+
+  // .stop coupe aussi .aai
+  await up(incoming(friend, '.stop', { fromMe: true }))
+  assert.equal(settings.isActive('aai', [friend]), false)
+
+  // pareil dans un groupe, avec .meai
+  await up(incoming(group, '.meai', { fromMe: true }))
+  await up(incoming(group, '.aai', { fromMe: true }))
+  assert.ok(settings.isActive('aai', [group]))
+  n = wa.sent.length
+  await up(incoming(group, 'Coucou le groupe', { fromMe: true }), 150)
+  assert.deepEqual(sentSince(n, group).map((s) => s.text), ['Réponse IA'])
+  assert.equal(fakeAI.calls.at(-1).mode, 'aai')
+
+  // inutile dans « Moi »
+  await up(incoming(self, '.aai', { fromMe: true }))
+  assert.equal(settings.isActive('aai', [self]), false)
 
   await kv.close()
 })
