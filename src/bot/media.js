@@ -88,6 +88,7 @@ export function createMediaCommands(bot) {
   const P = bot.prefix
   const previews = new TTLCache({ ttlMs: 30 * 60_000, max: 300 }) // miniature envoyée → résultat (réponses en citant)
   const running = new Set()
+  const pendingKey = (ctx) => `public:${ctx?.chat || ''}${ctx?.isGroup ? `#${ctx?.key?.participant || ''}` : ''}`
   const send = (chat, content, options) => bot.wa.send(chat, content, options)
   const service = () => {
     if (!bot.media) bot.media = new MediaService({ options: bot.config?.media, log: bot.log })
@@ -141,7 +142,7 @@ export function createMediaCommands(bot) {
       })
     }
     if (!sent) sent = await send(a.menuChat, { text: caption }, options).catch(() => null)
-    bot.setPending(a.menuChat, { step: MEDIA_KINDS[kind].step, target: a.t, item, kind })
+    bot.setPending(a.pendingKey || a.menuChat, { step: MEDIA_KINDS[kind].step, target: a.t, item, kind })
     if (sent?.key?.id) previews.set(sent.key.id, { item, kind })
   }
 
@@ -149,7 +150,7 @@ export function createMediaCommands(bot) {
   async function choose(a, kind) {
     const format = parseMediaChoice(kind, a.arg)
     if (!format) {
-      bot.setPending(a.menuChat, { ...a.pending })
+      bot.setPending(a.pendingKey || a.menuChat, { ...a.pending })
       return a.say('❌ Réponds *1* ou *2* (*0* pour annuler).')
     }
     deliver(a.menuChat, a.pending.item, format)
@@ -204,8 +205,10 @@ export function createMediaCommands(bot) {
     if (!preview) return false
     const format = parseMediaChoice(preview.kind, ctx.text)
     if (!format) return false
-    const pending = bot.getPending(ctx.chat)
-    if (pending && STEP_KIND[pending.step] && pending.item?.id === preview.item.id) bot.clearPending(ctx.chat)
+    for (const key of new Set([ctx.chat, pendingKey(ctx)])) {
+      const pending = bot.getPending(key)
+      if (pending && STEP_KIND[pending.step] && pending.item?.id === preview.item.id) bot.clearPending(key)
+    }
     deliver(ctx.chat, preview.item, format)
     return true
   }

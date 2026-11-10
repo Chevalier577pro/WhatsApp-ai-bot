@@ -31,6 +31,9 @@ export function createCommands(bot) {
   const { settings, wa, ai, memory } = bot
   const P = bot.prefix
   const mediaCmds = createMediaCommands(bot) // .song / .video
+  const PUBLIC_COMMANDS = new Set(Object.keys(mediaCmds.COMMANDS)) // .song / .video : tout le monde
+  const publicPendingKey = (ctx) =>
+    `public:${ctx?.chat || ''}${ctx?.isGroup ? `#${ctx?.key?.participant || ''}` : ''}`
   let modelList = [] // dernière liste de modèles affichée (pour « .model <numéro> »)
   const MODEL_FOOTER =
     'Réponds avec le *numéro* du modèle, *+* pour la page suivante, un *mot* pour chercher (ex : llama), ou *0* pour annuler.'
@@ -657,28 +660,28 @@ export function createCommands(bot) {
     },
   }
 
-  async function handlePending(ctx, pending) {
+  async function handlePending(ctx, pending, key = ctx.chat) {
     const input = String(ctx.text || '').trim()
     const menuChat = ctx.chat
     const say = (text) => wa.send(menuChat, { text }).catch((err) => bot.log.warn({ err: err?.message }, 'Envoi impossible'))
     if (mediaCmds.isStep(pending.step) && !mediaCmds.accepts(pending, input) && !CANCEL.test(input) && !/^\d{1,2}$/.test(input)) {
-      bot.clearPending(menuChat)
+      bot.clearPending(key)
       return false // message normal : le choix du format se ferme et le message est traité normalement
     }
     if (pending.step === 'menu' && !/^\d{1,2}$/.test(input)) {
-      bot.clearPending(menuChat)
+      bot.clearPending(key)
       if (CANCEL.test(input)) {
         await say('👋 Menu fermé.')
         return true
       }
       return false // message normal : le menu se ferme et le message est traité normalement
     }
-    bot.clearPending(menuChat)
+    bot.clearPending(key)
     if (CANCEL.test(input) || (input === '0' && pending.step !== 'menu' && !ZERO_IS_VALUE.has(pending.step))) {
       await say('❎ Annulé.')
       return true
     }
-    const a = { t: pending.target, arg: input, say, sayHere: say, sayRaw: say, menuChat, pending }
+    const a = { t: pending.target, arg: input, say, sayHere: say, sayRaw: say, menuChat, pending, pendingKey: key }
     try {
       if (pending.step === 'menu') await runMenuItem(Number.parseInt(input, 10), a)
       else if (STEPS[pending.step]) await STEPS[pending.step](a)
@@ -799,5 +802,49 @@ export function createCommands(bot) {
     return true
   }
 
-  return { run, handlePending, handleReply: mediaCmds.handleReply, mediaIdle: mediaCmds.idle, COMMANDS, MENU }
+  /** .song / .video : ouverts à tout le monde, sans toucher aux autres commandes (réservées au propriétaire). */
+  async function runPublic(ctx) {
+    const body = String(ctx.text || '').slice(P.length).trim()
+    const name = (body.split(/\s+/)[0] || '').toLowerCase()
+    if (!PUBLIC_COMMANDS.has(name)) return false
+    const arg = body.slice(name.length).trim()
+    const menuChat = ctx.chat
+    const pendingKey = publicPendingKey(ctx)
+    bot.clearPending(pendingKey)
+    const a = {
+      t: { chat: ctx.chat, ids: ctx.ids, isGroup: ctx.isGroup, self: ctx.self },
+      arg,
+      say: (text) => bot.reply(ctx, text, { here: true }),
+      sayHere: (text) => bot.reply(ctx, text, { here: true }),
+      sayRaw: (text) => wa.send(menuChat, { text }).catch(() => {}),
+      menuChat,
+      pendingKey,
+      pending: null,
+      ctx,
+    }
+    try {
+      await mediaCmds.COMMANDS[name](a)
+    } catch (err) {
+      bot.log.error({ err: err?.message, cmd: name }, 'Erreur de commande publique')
+      await a.say(`⚠️ ${err?.message || err}`)
+    }
+    return true
+  }
+
+  async function handlePublicPending(ctx, pending, key) {
+    if (!mediaCmds.isStep(pending?.step)) return false
+    return handlePending(ctx, pending, key)
+  }
+
+  return {
+    run,
+    runPublic,
+    handlePending,
+    handlePublicPending,
+    publicPendingKey,
+    handleReply: mediaCmds.handleReply,
+    mediaIdle: mediaCmds.idle,
+    COMMANDS,
+    MENU,
+  }
 }

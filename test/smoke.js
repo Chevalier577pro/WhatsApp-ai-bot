@@ -316,8 +316,8 @@ const fakeAI = {
 }
 
 let seq = 0
-const incoming = (remoteJid, text, { fromMe = false, pushName = 'Bob' } = {}) => ({
-  key: { remoteJid, fromMe, id: `MSG${++seq}` },
+const incoming = (remoteJid, text, { fromMe = false, pushName = 'Bob', participant } = {}) => ({
+  key: { remoteJid, fromMe, id: `MSG${++seq}`, ...(participant ? { participant } : {}) },
   message: { conversation: text },
   pushName,
   messageTimestamp: Math.floor(Date.now() / 1000),
@@ -866,6 +866,63 @@ await test('Bot : .video en mode discret, message normal, réponse en citant la 
   assert.ok(mp4, 'le MP4 doit être envoyé en fichier')
   assert.equal(mp4.content.mimetype, 'video/mp4')
   assert.equal(mp4.content.fileName, 'Bababoy.mp4')
+})
+
+await test('Bot : .song et .video accessibles à tout le monde, pas seulement au propriétaire', async () => {
+  const kv = await newKv('bot-public-media')
+  const settings = new Settings(kv)
+  const wa = new FakeWA()
+  const media = new FakeMedia()
+  const bot = new Bot({ wa, kv, settings, ai: fakeAI, config: { prefix: '.', botName: 'Nova', ownerName: '' }, log: silent, media })
+  const friend = '33644444444@s.whatsapp.net'
+  const group = '120363000000000002@g.us'
+  const alice = '33655555555@s.whatsapp.net'
+  const bob = '33666666666@s.whatsapp.net'
+  const up = async (msg, wait = 40) => {
+    await bot.onUpsert({ messages: [msg], type: 'notify' })
+    await sleep(wait)
+  }
+
+  // Un contact peut utiliser .song (sans IA active)
+  await up(incoming(friend, '.song bababoy'))
+  assert.deepEqual(media.searches.at(-1), { query: 'bababoy', kind: 'audio' })
+  const preview = wa.sent.at(-1)
+  assert.equal(preview.jid, friend, 'la miniature doit aller au contact, pas au propriétaire')
+  assert.match(preview.content.caption, /Bababoy/)
+  const friendKey = `public:${friend}`
+  assert.equal(bot.getPending(friendKey)?.step, 'song')
+
+  // « 1 » → MP3 envoyé au contact
+  let n = wa.sent.length
+  await up(incoming(friend, '1'))
+  await bot.commands.mediaIdle()
+  const mp3 = wa.sent.slice(n).find((s) => s.jid === friend && s.content?.document)
+  assert.ok(mp3, 'le MP3 doit être envoyé au contact')
+  assert.equal(mp3.content.mimetype, 'audio/mpeg')
+  assert.equal(bot.getPending(friendKey), null)
+
+  // En groupe, la miniature et le fichier vont au groupe, et chaque membre a son propre choix
+  await up(incoming(group, '.video clip', { participant: alice }))
+  assert.deepEqual(media.searches.at(-1), { query: 'clip', kind: 'video' })
+  assert.equal(wa.sent.at(-1).jid, group)
+  const aliceKey = `public:${group}#${alice}`
+  assert.equal(bot.getPending(aliceKey)?.step, 'video')
+  await up(incoming(group, '.song autre', { participant: bob }))
+  const bobKey = `public:${group}#${bob}`
+  assert.equal(bot.getPending(bobKey)?.step, 'song')
+  assert.equal(bot.getPending(aliceKey)?.step, 'video', 'le choix d’Alice ne doit pas être écrasé par Bob')
+
+  // Alice répond « 1 » : son MP4 part dans le groupe
+  n = wa.sent.length
+  await up(incoming(group, '1', { participant: alice }))
+  await bot.commands.mediaIdle()
+  const mp4 = wa.sent.slice(n).find((s) => s.jid === group && s.content?.document)
+  assert.ok(mp4, 'le MP4 doit être envoyé dans le groupe')
+  assert.equal(mp4.content.mimetype, 'video/mp4')
+  assert.equal(bot.getPending(aliceKey), null)
+  assert.equal(bot.getPending(bobKey)?.step, 'song', 'le choix de Bob reste intact')
+
+  await kv.close()
 })
 
 await fs.rm(tmp, { recursive: true, force: true }).catch(() => {})

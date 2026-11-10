@@ -13,9 +13,9 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 - 💬 **IA privée** : active `.ai` dans ta discussion « Moi » pour discuter avec ton IA.
 - 📋 **Menu numéroté** (`.menu`, options 1 à 18 et 0) : tout se règle en répondant par un numéro.
 - 📖 **`.help`** : la liste de toutes les commandes avec leurs explications.
-- 🎵 **`.song`** et 🎬 **`.video`** : tu tapes un titre (ou un lien), le bot t'envoie la miniature et tu choisis **MP3 / audio WhatsApp** ou **MP4 / vidéo WhatsApp**.
+- 🎵 **`.song`** et 🎬 **`.video`** : un titre (ou un lien) → miniature → choix **MP3 / audio WhatsApp** ou **MP4 / vidéo WhatsApp**. Accessibles **à tout le monde**, pas seulement à toi.
 - 🧠 **Choix du modèle** parmi tous les modèles NVIDIA (liste paginée, recherche, test automatique).
-- 🔒 **Commandes réservées au propriétaire** : seuls TES messages sont lus comme des commandes.
+- 🔒 **Commandes réservées au propriétaire** : seuls TES messages sont lus comme des commandes, sauf `.song` et `.video` (ouverts à tous).
 - 🕶️ **Mode discret** : tes commandes sont effacées et les réponses arrivent dans ta discussion « Moi ».
 - 👥 **Groupes** : réponse à tous les messages ou seulement quand on te mentionne.
 - 🧩 Mémoire par discussion, personnalité, consignes perso, température, délai de réponse, signature…
@@ -81,7 +81,7 @@ Tu peux aussi glisser-déposer les fichiers sur github.com (**Add file → Uploa
 
 ## 💬 Utilisation
 
-Toutes les commandes commencent par `.` et ne marchent **que depuis ton compte** : les messages de tes contacts ne sont jamais lus comme des commandes.
+Toutes les commandes commencent par `.` et ne marchent **que depuis ton compte**, sauf **`.song`** et **`.video`** que tes contacts et les groupes peuvent aussi utiliser.
 Le plus simple : envoie **`.menu`** dans ta discussion « Moi » (ou dans n'importe quelle discussion), puis réponds par un numéro. Pour voir toutes les commandes avec leurs explications : **`.help`**.
 
 ### Le menu `.menu`
@@ -158,6 +158,8 @@ Pour le modèle : un **numéro** pour choisir, **+** pour la page suivante, ou u
 Quand tu tapes une commande dans une discussion, elle est **supprimée pour tout le monde** et la réponse du bot arrive dans ta discussion « Moi ». Ton contact voit seulement « Ce message a été supprimé ». Pour garder les commandes visibles : `.discret off`.
 
 ### 🎵 Musique et vidéos : `.song` et `.video`
+
+Ces deux commandes sont **ouvertes à tout le monde** : tes contacts et les membres d'un groupe peuvent les utiliser directement, sans que l'IA soit active. Chaque personne reçoit sa miniature et son fichier dans sa discussion (ou dans le groupe).
 
 ```
 .song bababoy

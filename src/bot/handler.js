@@ -245,6 +245,17 @@ export class Bot {
   /** Message reçu d'un contact ou d'un groupe. */
   async onIncoming(ctx) {
     const { chat, msg, key, content, isGroup } = ctx
+    // .song / .video : accessibles à tout le monde, même sans IA active
+    if (content.text) {
+      const p = this.prefix
+      if (!content.text.startsWith(p) && ctx.content?.contextInfo?.stanzaId && (await this.commands.handleReply?.(ctx))) return
+      if (!content.text.startsWith(p)) {
+        const pendingKey = this.commands.publicPendingKey(ctx)
+        const pending = this.getPending(pendingKey)
+        if (pending && (await this.commands.handlePublicPending(ctx, pending, pendingKey))) return
+      }
+      if (content.text.startsWith(p) && content.text.length > p.length && (await this.commands.runPublic(ctx))) return
+    }
     const modes = this.activeModes(ctx.ids)
     if (!modes.length) return
     const mode = modes.includes('meai') ? 'meai' : 'ai'
