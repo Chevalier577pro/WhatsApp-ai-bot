@@ -268,7 +268,7 @@ L'offre gratuite donne 750 heures par mois, assez pour un service allumé 24 h/2
 src/
 ├── index.js       démarrage du bot
 ├── config.js      variables d'environnement
-├── web/           site d'appairage (server.js + public/index.html)
+├── web/           site (server.js + public/ : page, styles, scène 3D, catalogue des commandes)
 ├── whatsapp/      connexion WhatsApp (Baileys)
 ├── bot/           messages, commandes, menu, mémoire
 ├── ai/            client NVIDIA et construction des prompts

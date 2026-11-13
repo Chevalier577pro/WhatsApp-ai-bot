@@ -53,7 +53,7 @@ async function main() {
   } else if (config.adminPassword === 'change-moi') {
     logger.warn('ADMIN_PASSWORD vaut encore « change-moi » : choisis un vrai mot de passe.')
   }
-  const server = startWebServer({ wa, config, log: logger, settings })
+  const server = startWebServer({ wa, config, log: logger, settings, commands: bot.commands })
 
   if (wa.hasSession()) {
     wa.start().catch((err) => logger.error({ err: err?.message }, 'Connexion WhatsApp impossible'))

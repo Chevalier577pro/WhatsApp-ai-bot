@@ -1,375 +1,607 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<title>Connexion WhatsApp — Bot IA</title>
-<style>
-:root{--bg:#0b141a;--card:#111b21;--line:#233138;--text:#e9edef;--muted:#8696a0;--green:#25d366;--green2:#00a884;--red:#f15c6d;--amber:#ffb02e;--chip:#202c33}
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;justify-content:center;padding:24px 14px}
-main{width:100%;max-width:520px}
-header{display:flex;align-items:center;gap:12px;margin-bottom:18px}
-.logo{width:44px;height:44px;border-radius:12px;background:var(--green2);display:grid;place-items:center;font-size:24px;flex:none}
-h1{font-size:19px;margin:0}
-.sub{color:var(--muted);font-size:13px;margin-top:2px}
-.badge{margin-left:auto;font-size:12px;padding:6px 10px;border-radius:999px;background:var(--chip);color:var(--muted);white-space:nowrap}
-.badge.ok{background:rgba(37,211,102,.15);color:var(--green)}
-.badge.wait{background:rgba(255,176,46,.15);color:var(--amber)}
-.badge.err{background:rgba(241,92,109,.15);color:var(--red)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
-.card h2{font-size:16px;margin:0 0 10px}
-label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
-input,textarea{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px;font-size:16px;outline:none}
-input:focus,textarea:focus{border-color:var(--green2)}
-textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;resize:vertical;min-height:96px;word-break:break-all}
-button{appearance:none;border:0;border-radius:10px;padding:12px 16px;font-size:15px;font-weight:600;cursor:pointer;background:var(--green2);color:#fff;margin-top:12px;width:100%}
-button.secondary{background:var(--chip);color:var(--text)}
-button.danger{background:transparent;color:var(--red);border:1px solid rgba(241,92,109,.4)}
-button:disabled{opacity:.55;cursor:default}
-.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);padding:4px;border-radius:12px;margin-bottom:14px}
-.tabs button{margin:0;background:transparent;color:var(--muted);padding:9px 6px;font-size:14px}
-.tabs button.active{background:var(--chip);color:var(--text)}
-.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:34px;font-weight:700;letter-spacing:4px;text-align:center;padding:16px 8px;background:var(--bg);border:1px dashed var(--green2);border-radius:12px;margin-top:14px;user-select:all}
-.muted{color:var(--muted);font-size:13px;line-height:1.55;margin:0}
-ol{padding-left:20px;line-height:1.7;font-size:14px;margin:12px 0 0}
-.qr{display:block;margin:14px auto 0;width:264px;max-width:100%;background:#fff;border-radius:12px;padding:10px}
-.msg{font-size:14px;margin-top:12px;padding:10px 12px;border-radius:10px;display:none;line-height:1.45}
-.msg.show{display:block}
-.msg.err{background:rgba(241,92,109,.12);color:var(--red)}
-.msg.ok{background:rgba(37,211,102,.12);color:var(--green)}
-.hidden{display:none!important}
-.timer{text-align:center;color:var(--muted);font-size:13px;margin-top:8px}
-footer{text-align:center;color:var(--muted);font-size:12px;margin-top:18px;line-height:1.6}
-code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:12px}
-</style>
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#060b10">
+<meta name="description" content="Bot WhatsApp IA propulsé par NVIDIA : assistant, réponses à ta place, vision, fichiers, musique et vidéos. Connecte ton compte en une minute.">
+<title>Bot WhatsApp IA</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" id="favicon">
+<link rel="stylesheet" href="/assets/style.css?v=6">
+<script>
+  // Thème appliqué avant le premier rendu (pas de flash)
+  document.documentElement.classList.add('js')
+  try {
+    var t = localStorage.getItem('theme')
+    document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+  } catch (e) {}
+</script>
 </head>
 <body>
-<main>
-  <header>
-    <div class="logo">🤖</div>
-    <div>
-      <h1 id="title">Bot WhatsApp IA</h1>
-      <div class="sub">Connexion de ton compte WhatsApp</div>
-    </div>
-    <span id="badge" class="badge">…</span>
-  </header>
+<div class="progress" id="progress" aria-hidden="true"></div>
+<a class="skip" href="#connect">Aller à la connexion</a>
 
-  <section id="pwdCard" class="card hidden">
-    <h2>🔒 Mot de passe administrateur</h2>
-    <p class="muted">C'est la valeur de la variable <code>ADMIN_PASSWORD</code> que tu as définie sur Render.</p>
-    <input id="pwd" type="password" placeholder="Mot de passe" autocomplete="current-password">
-    <button id="pwdBtn">Valider</button>
-    <div id="pwdMsg" class="msg"></div>
+<!-- ───────────── Navigation ───────────── -->
+<header class="nav" id="nav">
+  <div class="nav-inner container">
+    <a class="brand" href="#top" aria-label="Accueil">
+      <span class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#25d366"/><stop offset=".55" stop-color="#22d3ee"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs><path fill="url(#lg)" d="M16 2.5C8.5 2.5 2.5 8.4 2.5 15.7c0 2.5.7 4.9 2 7L3 29.5l7-1.8a13.6 13.6 0 0 0 6 1.4c7.5 0 13.5-5.9 13.5-13.2S23.5 2.5 16 2.5Z"/><circle cx="11" cy="15.5" r="2" fill="#061016"/><circle cx="16" cy="15.5" r="2" fill="#061016"/><circle cx="21" cy="15.5" r="2" fill="#061016"/></svg>
+      </span>
+      <span class="brand-name"><span class="js-botname">Nova</span><small>Bot WhatsApp IA</small></span>
+    </a>
+    <nav class="nav-links" id="navLinks" aria-label="Sections">
+      <a href="#features">Fonctionnalités</a>
+      <a href="#modes">Modes IA</a>
+      <a href="#commands">Commandes</a>
+      <a href="#how">Fonctionnement</a>
+      <a href="#guide">Installation</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="status-pill" id="navStatus" href="#dashboard" title="État du bot"><span class="dot"></span><span id="navStatusText">…</span></a>
+      <button class="icon-btn" id="paletteBtn" type="button" aria-label="Recherche rapide (Ctrl + K)" title="Recherche rapide (Ctrl + K)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Changer de thème" title="Thème clair / sombre">
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="btn btn-primary btn-sm nav-cta" href="#connect">Connexion</a>
+      <button class="icon-btn burger" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="navLinks">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <!-- ───────────── Hero ───────────── -->
+  <section class="hero">
+    <canvas id="scene" class="hero-scene" aria-hidden="true"></canvas>
+    <div class="hero-aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <span class="eyebrow"><span class="spark" aria-hidden="true"></span>Propulsé par NVIDIA · 100 % en français</span>
+        <h1 class="hero-title">Ton assistant IA,<br><span class="grad">directement dans WhatsApp.</span></h1>
+        <p class="hero-sub"><b class="js-botname">Nova</b> répond à tes contacts, écrit à ta place avec ton style, regarde les photos, t'envoie des fichiers et télécharge musiques et vidéos. Le tout depuis <b>ton propre numéro</b>.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-lg" href="#connect">Connecter mon WhatsApp <span aria-hidden="true">→</span></a>
+          <a class="btn btn-ghost btn-lg" href="#commands">Voir les commandes</a>
+        </div>
+        <dl class="hero-stats">
+          <div><dt><span class="counter" id="statCmds" data-count="33">0</span></dt><dd>commandes</dd></div>
+          <div><dt><span class="counter" data-count="500">0</span></dt><dd>messages de mémoire</dd></div>
+          <div><dt>∞</dt><dd>longueur de réponse</dd></div>
+          <div><dt><span class="counter" data-count="24">0</span>/7</dt><dd>en ligne sur Render</dd></div>
+        </dl>
+      </div>
+
+      <div class="hero-visual" id="heroVisual" aria-label="Démonstration d'une conversation WhatsApp avec l'IA">
+        <div class="stage" id="stage">
+          <div class="phone">
+            <span class="phone-btn b1"></span><span class="phone-btn b2"></span><span class="phone-btn b3"></span>
+            <div class="phone-screen">
+              <div class="phone-island"></div>
+              <div class="wa-head">
+                <span class="wa-back" aria-hidden="true">‹</span>
+                <span class="wa-avatar">L</span>
+                <div class="wa-who"><b id="heroContact">Léa</b><small id="heroTyping">en ligne</small></div>
+                <span class="wa-icons" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M15 10.5 20 7v10l-5-3.5M3 7h12v10H3z"/></svg>
+                  <svg viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>
+                </span>
+              </div>
+              <div class="wa-chat" id="heroChat" aria-live="off"></div>
+              <div class="wa-input"><span class="wa-field">Message</span><span class="wa-mic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></span></div>
+            </div>
+          </div>
+          <div class="chip3d c1"><span>👁️</span>Vision</div>
+          <div class="chip3d c2"><span>🎵</span>.song</div>
+          <div class="chip3d c3"><span>🧠</span>Mémoire</div>
+          <div class="chip3d c4"><span>📎</span>Fichiers</div>
+          <div class="stage-shadow"></div>
+        </div>
+      </div>
+    </div>
+    <a class="scroll-hint" href="#dashboard" aria-label="Descendre"><span></span></a>
   </section>
 
-  <section id="connectedCard" class="card hidden">
-    <h2>✅ WhatsApp connecté</h2>
-    <p class="muted" id="who"></p>
-    <div id="sessionBox" class="hidden">
-      <label for="sessionId">Ton SESSION_ID (garde-le secret : il donne accès à ton WhatsApp)</label>
-      <textarea id="sessionId" readonly></textarea>
-      <button id="copySession">📋 Copier le SESSION_ID</button>
-      <ol>
-        <li>Sur Render, ouvre ton service → <b>Environment</b>.</li>
-        <li>Colle la valeur dans la variable <code>SESSION_ID</code> puis <b>Save changes</b>.</li>
-        <li>Le bot se reconnectera tout seul après chaque redémarrage.</li>
+  <!-- ───────────── Tableau de bord ───────────── -->
+  <section id="dashboard" class="section section-tight">
+    <div class="container">
+      <div class="dash glass" data-reveal>
+        <div class="dash-head">
+          <div class="orb" id="orb" aria-hidden="true"><i></i><i></i><i></i><b></b></div>
+          <div class="dash-title">
+            <p class="kicker">Tableau de bord en direct</p>
+            <h2 id="dashTitle">Connexion au bot…</h2>
+            <p class="muted" id="dashSub">Récupération de l'état du bot.</p>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="#connect" id="dashAction">Gérer la connexion</a>
+        </div>
+        <div class="metrics">
+          <div class="metric"><span class="metric-ico">⏱️</span><span class="metric-label">Serveur en ligne depuis</span><b id="mUptime">—</b></div>
+          <div class="metric"><span class="metric-ico">📱</span><span class="metric-label">Compte WhatsApp</span><b id="mAccount">—</b></div>
+          <div class="metric"><span class="metric-ico">🔗</span><span class="metric-label">Connecté depuis</span><b id="mSince">—</b></div>
+          <div class="metric"><span class="metric-ico">🧠</span><span class="metric-label">Modèle IA</span><b id="mModel" class="mono">—</b></div>
+        </div>
+        <div class="diag" id="diag" aria-label="Diagnostic"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Connexion ───────────── -->
+  <section id="connect" class="section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Connexion</p>
+        <h2>Relie ton WhatsApp en <span class="grad">moins d'une minute</span></h2>
+        <p class="lead">Comme WhatsApp Web : ton téléphone reste l'appareil principal, le bot devient un « appareil connecté ».</p>
+      </div>
+
+      <div class="connect-grid">
+        <aside class="stepper" data-reveal>
+          <ol id="steps">
+            <li data-step="1"><span class="step-n">1</span><div><b>Choisis une méthode</b><small>Code à 8 caractères, QR code ou SESSION_ID existant.</small></div></li>
+            <li data-step="2"><span class="step-n">2</span><div><b>Valide dans WhatsApp</b><small>Réglages → Appareils connectés → Connecter un appareil.</small></div></li>
+            <li data-step="3"><span class="step-n">3</span><div><b>Sauvegarde ton SESSION_ID</b><small>Colle-le sur Render : le bot se reconnecte tout seul après chaque redémarrage.</small></div></li>
+          </ol>
+          <div class="callout">
+            <b>🔐 Garde ton SESSION_ID secret</b>
+            <p>Il donne accès à ton WhatsApp. Ne le partage jamais et ne le mets jamais dans le code sur GitHub.</p>
+          </div>
+        </aside>
+
+        <div class="panel glass" id="panel" data-reveal>
+          <!-- Mot de passe -->
+          <div id="pwdCard" class="pane hidden">
+            <div class="pane-ico">🔒</div>
+            <h3>Mot de passe administrateur</h3>
+            <p class="muted">C'est la valeur de la variable <code>ADMIN_PASSWORD</code> que tu as définie sur Render.</p>
+            <div class="field">
+              <input id="pwd" type="password" placeholder="Mot de passe" autocomplete="current-password" aria-label="Mot de passe administrateur">
+              <button class="field-btn" id="pwdEye" type="button" aria-label="Afficher le mot de passe">👁</button>
+            </div>
+            <button id="pwdBtn" class="btn btn-primary btn-block" type="button">Déverrouiller</button>
+            <div id="pwdMsg" class="msg" role="status"></div>
+          </div>
+
+          <!-- Connecté -->
+          <div id="connectedCard" class="pane hidden">
+            <div class="ok-head">
+              <div class="ok-badge" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></div>
+              <div><h3>WhatsApp connecté</h3><p class="muted" id="who"></p></div>
+            </div>
+            <div id="sessionBox" class="hidden">
+              <label for="sessionId">Ton SESSION_ID <span class="tag tag-warn">secret</span></label>
+              <div class="secret" id="secretWrap">
+                <textarea id="sessionId" readonly spellcheck="false"></textarea>
+                <button class="secret-veil" id="revealSession" type="button"><span>👁</span> Cliquer pour afficher</button>
+              </div>
+              <div class="row">
+                <button id="copySession" class="btn btn-primary" type="button">📋 Copier le SESSION_ID</button>
+                <button id="hideSession" class="btn btn-ghost" type="button">🙈 Masquer</button>
+              </div>
+              <ol class="mini-steps">
+                <li>Sur Render, ouvre ton service → <b>Environment</b>.</li>
+                <li>Colle la valeur dans la variable <code>SESSION_ID</code> puis <b>Save changes</b>.</li>
+                <li>Le bot se reconnectera tout seul après chaque redémarrage.</li>
+              </ol>
+            </div>
+            <button id="showSession" class="btn btn-ghost btn-block hidden" type="button">🔑 Afficher mon SESSION_ID</button>
+            <button id="logoutBtn" class="btn btn-danger btn-block hidden" type="button">Déconnecter ce WhatsApp</button>
+            <div id="connMsg" class="msg" role="status"></div>
+            <p class="hint" id="noPwdHint">Pour afficher ton SESSION_ID ou déconnecter le bot depuis ce site, ajoute la variable <code>ADMIN_PASSWORD</code> sur Render. Tu peux aussi envoyer <code><span class="js-prefix">.</span>session</code> dans ta discussion avec toi-même.</p>
+            <p class="hint">Sur WhatsApp, envoie <code><span class="js-prefix">.</span>menu</code> dans ta discussion avec toi-même (« Moi ») pour voir toutes les options.</p>
+          </div>
+
+          <!-- Appairage -->
+          <div id="pairCard" class="hidden">
+            <div id="statusMsg" class="msg" role="status"></div>
+            <div class="seg" role="tablist" aria-label="Méthode de connexion" id="tabs">
+              <span class="seg-ind" aria-hidden="true"></span>
+              <button role="tab" type="button" data-tab="code" class="active" aria-selected="true" aria-controls="tab-code">🔢 Code</button>
+              <button role="tab" type="button" data-tab="qr" aria-selected="false" aria-controls="tab-qr">📷 QR code</button>
+              <button role="tab" type="button" data-tab="import" aria-selected="false" aria-controls="tab-import">🔑 SESSION_ID</button>
+            </div>
+
+            <div id="tab-code" class="pane" role="tabpanel">
+              <h3>Connexion avec un code</h3>
+              <label for="phone">Ton numéro WhatsApp</label>
+              <div class="phone-field">
+                <select id="country" aria-label="Indicatif du pays"></select>
+                <input id="phone" inputmode="tel" placeholder="6 12 34 56 78" autocomplete="tel">
+              </div>
+              <p class="field-hint" id="phonePreview">Choisis ton pays puis tape ton numéro (le 0 du début est retiré tout seul).</p>
+              <button id="pairBtn" class="btn btn-primary btn-block" type="button">Obtenir mon code</button>
+              <div id="pairResult" class="hidden">
+                <div class="code-box">
+                  <div id="code" class="tiles" aria-live="polite" aria-label="Code d'appairage"></div>
+                  <div class="ring" aria-hidden="true">
+                    <svg viewBox="0 0 44 44"><circle class="ring-bg" cx="22" cy="22" r="19"/><circle id="timerRing" class="ring-fg" cx="22" cy="22" r="19"/></svg>
+                    <span id="timerShort">3:00</span>
+                  </div>
+                </div>
+                <div id="timer" class="timer"></div>
+                <button id="copyCode" class="btn btn-ghost btn-block" type="button">📋 Copier le code</button>
+                <ol class="mini-steps">
+                  <li>Ouvre <b>WhatsApp</b> sur ton téléphone.</li>
+                  <li><b>Réglages</b> (ou ⋮) → <b>Appareils connectés</b> → <b>Connecter un appareil</b>.</li>
+                  <li>Touche <b>Connecter avec un numéro de téléphone</b>.</li>
+                  <li>Saisis le code ci-dessus. Le bot se connecte tout seul.</li>
+                </ol>
+              </div>
+              <div id="pairMsg" class="msg" role="status"></div>
+            </div>
+
+            <div id="tab-qr" class="pane hidden" role="tabpanel">
+              <h3>Connexion avec un QR code</h3>
+              <p class="muted">Pratique si ce site est ouvert sur un ordinateur : WhatsApp → Appareils connectés → Connecter un appareil, puis scanne le QR.</p>
+              <button id="qrBtn" class="btn btn-primary btn-block" type="button">Afficher le QR code</button>
+              <div id="qrWrap" class="qr hidden">
+                <img id="qrImg" alt="QR code WhatsApp">
+                <span class="qr-laser" aria-hidden="true"></span>
+                <i class="qc tl"></i><i class="qc tr"></i><i class="qc bl"></i><i class="qc br"></i>
+              </div>
+              <div id="qrMsg" class="msg" role="status"></div>
+            </div>
+
+            <div id="tab-import" class="pane hidden" role="tabpanel">
+              <h3>J'ai déjà un SESSION_ID</h3>
+              <p class="muted">Colle un SESSION_ID (il commence par <code>WAI~</code>) pour reconnecter le bot sans refaire l'appairage.</p>
+              <textarea id="importInput" placeholder="WAI~..." spellcheck="false"></textarea>
+              <button id="importBtn" class="btn btn-primary btn-block" type="button">Importer et se connecter</button>
+              <div id="importMsg" class="msg" role="status"></div>
+            </div>
+          </div>
+
+          <div id="panelLoading" class="pane loading"><span class="spinner"></span> Chargement de l'état du bot…</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Fonctionnalités ───────────── -->
+  <section id="features" class="section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Fonctionnalités</p>
+        <h2>Tout ce qu'une IA peut faire <span class="grad">dans tes discussions</span></h2>
+        <p class="lead">Chaque fonction s'active d'une simple commande, discussion par discussion. Tes réglages s'affichent dans <code><span class="js-prefix">.</span>menu</code>.</p>
+      </div>
+      <div class="bento">
+        <article class="card tilt span-2 row-2" data-reveal>
+          <div class="card-ico">🤖</div>
+          <h3>Assistant IA <code><span class="js-prefix">.</span>ai</code></h3>
+          <p>Active-le dans une discussion : <b class="js-botname">Nova</b> répond à tes contacts en se présentant comme ton assistant. Dans ta discussion « Moi », c'est ton IA privée.</p>
+          <div class="mini-chat" aria-hidden="true">
+            <div class="b in">Il est dispo samedi ?</div>
+            <div class="b out">Bonjour 👋 Je suis <span class="js-botname">Nova</span>, l'assistante de Lucas. Il te répond dès qu'il voit ton message !</div>
+            <div class="b in">Top, merci 🙏</div>
+            <div class="typing"><i></i><i></i><i></i></div>
+          </div>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">🪞</div>
+          <h3>Répond à ta place <code><span class="js-prefix">.</span>meai</code></h3>
+          <p>L'IA écrit comme toi, avec ton style. Si tu réponds avant elle, elle se tait.</p>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">🙋</div>
+          <h3>Te répond aussi <code><span class="js-prefix">.</span>aai</code></h3>
+          <p>L'IA répond aussi à <b>tes</b> messages, en les citant. Marche en groupe.</p>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">👁️</div>
+          <h3>Voit les images</h3>
+          <p>Une photo reçue est décrite par un modèle de vision NVIDIA avant la réponse.</p>
+          <div class="vision" aria-hidden="true"><span class="vbox">🪴 plante · 98 %</span><span class="vscan"></span></div>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">📎</div>
+          <h3>Envoie des fichiers</h3>
+          <p>Demande une page <code>.html</code>, un <code>.csv</code>, du code… elle arrive en pièce jointe.</p>
+        </article>
+        <article class="card tilt span-2" data-reveal>
+          <div class="card-ico">🎵</div>
+          <h3>Musique & vidéos <code><span class="js-prefix">.</span>song</code> <code><span class="js-prefix">.</span>video</code></h3>
+          <p>Un titre ou un lien → miniature → MP3, audio WhatsApp, MP4 ou vidéo lisible directement. <b>Ouvert à tous</b> tes contacts.</p>
+          <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">🧠</div>
+          <h3>Mémoire</h3>
+          <p>500 messages retenus par discussion. <code><span class="js-prefix">.</span>reset</code> pour faire oublier.</p>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">🕶️</div>
+          <h3>Mode discret</h3>
+          <p>Tes commandes sont effacées, les réponses arrivent dans « Moi ». Actif par défaut.</p>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">👥</div>
+          <h3>Groupes</h3>
+          <p>Répond à tous les messages, ou seulement quand on te mentionne.</p>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">🧬</div>
+          <h3>Tous les modèles NVIDIA</h3>
+          <p>Liste paginée, recherche, test du temps de réponse et mode réflexion.</p>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">🎨</div>
+          <h3>Personnalisation</h3>
+          <p>Nom, personnalité, consignes, température, délai, signature…</p>
+        </article>
+        <article class="card tilt" data-reveal>
+          <div class="card-ico">📋</div>
+          <h3>Menu numéroté</h3>
+          <p>21 options par thèmes avec tes réglages actuels, sans retenir une seule commande.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Modes IA ───────────── -->
+  <section id="modes" class="section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Explication</p>
+        <h2>Trois façons de laisser <span class="grad">l'IA répondre</span></h2>
+        <p class="lead">Choisis un mode pour voir qui parle, comment, et à qui.</p>
+      </div>
+      <div class="modes glass" data-reveal>
+        <div class="modes-side">
+          <div class="seg seg-vertical" role="tablist" aria-label="Modes IA" id="modeTabs">
+            <button role="tab" type="button" data-mode="ai" class="active" aria-selected="true"><code><span class="js-prefix">.</span>ai</code><small>Un assistant répond</small></button>
+            <button role="tab" type="button" data-mode="meai" aria-selected="false"><code><span class="js-prefix">.</span>meai</code><small>L'IA répond à ta place</small></button>
+            <button role="tab" type="button" data-mode="aai" aria-selected="false"><code><span class="js-prefix">.</span>aai</code><small>L'IA te répond aussi</small></button>
+          </div>
+          <div class="mode-info" id="modeInfo" aria-live="polite"></div>
+        </div>
+        <div class="mode-demo">
+          <div class="mini-phone">
+            <div class="wa-head small"><span class="wa-avatar" id="modeAvatar">L</span><div class="wa-who"><b id="modeContact">Léa</b><small id="modeTyping">en ligne</small></div><button class="replay" id="modeReplay" type="button" aria-label="Rejouer">↻</button></div>
+            <div class="wa-chat" id="modeChat"></div>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap" data-reveal>
+        <table class="compare">
+          <thead><tr><th></th><th><code><span class="js-prefix">.</span>ai</code></th><th><code><span class="js-prefix">.</span>meai</code></th><th><code><span class="js-prefix">.</span>aai</code></th></tr></thead>
+          <tbody>
+            <tr><th>Qui répond ?</th><td>Un assistant (<span class="js-botname">Nova</span>)</td><td>« Toi », imité par l'IA</td><td>L'IA, à tes propres messages</td></tr>
+            <tr><th>Se présente comme une IA</th><td><span class="yes">Oui</span></td><td><span class="no">Non</span></td><td><span class="yes">Oui</span></td></tr>
+            <tr><th>Attend le délai <code><span class="js-prefix">.</span>delai</code></th><td><span class="no">Non</span></td><td><span class="yes">Oui</span>, et se tait si tu réponds</td><td><span class="no">Non</span></td></tr>
+            <tr><th>Peut envoyer des fichiers</th><td><span class="yes">Oui</span></td><td><span class="no">Non</span></td><td><span class="yes">Oui</span></td></tr>
+            <tr><th>Condition</th><td>—</td><td>Remplace <code><span class="js-prefix">.</span>ai</code> ici</td><td><code><span class="js-prefix">.</span>ai</code> ou <code><span class="js-prefix">.</span>meai</code> déjà actif</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Commandes ───────────── -->
+  <section id="commands" class="section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Commandes</p>
+        <h2>Toutes les commandes, <span class="grad">expliquées</span></h2>
+        <p class="lead">Réservées au propriétaire du numéro, sauf 🎵 <code><span class="js-prefix">.</span>song</code> et 🎬 <code><span class="js-prefix">.</span>video</code>, ouvertes à tous. Clique sur une commande pour le détail et les exemples.</p>
+      </div>
+      <div class="cmd-toolbar" data-reveal>
+        <label class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="cmdSearch" type="search" placeholder="Rechercher : musique, mémoire, vision, modèle…" autocomplete="off" aria-label="Rechercher une commande">
+          <kbd>/</kbd>
+        </label>
+        <div class="chips" id="cmdCats" role="toolbar" aria-label="Catégories"></div>
+      </div>
+      <p class="cmd-count" id="cmdCount" aria-live="polite"></p>
+      <div class="cmd-grid" id="cmdList"></div>
+      <p id="cmdEmpty" class="empty hidden">Aucune commande ne correspond. Essaie un autre mot 🙂</p>
+    </div>
+  </section>
+
+  <!-- ───────────── Comment ça marche ───────────── -->
+  <section id="how" class="section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Comment ça marche</p>
+        <h2>Le trajet d'un message, <span class="grad">pas à pas</span></h2>
+        <p class="lead">Clique sur un bloc pour comprendre son rôle, ou lance la simulation.</p>
+      </div>
+      <div class="arch glass" id="arch" data-reveal>
+        <svg class="arch-lines" id="archLines" aria-hidden="true"></svg>
+        <div class="arch-grid">
+          <button class="node" type="button" data-node="whatsapp" style="grid-area:wa"><span>📱</span><b>Ton WhatsApp</b><small>téléphone principal</small></button>
+          <button class="node" type="button" data-node="site" style="grid-area:site"><span>🌐</span><b>Ce site</b><small>appairage</small></button>
+          <button class="node" type="button" data-node="baileys" style="grid-area:bai"><span>🔌</span><b>Baileys</b><small>protocole WhatsApp Web</small></button>
+          <button class="node node-core" type="button" data-node="bot" style="grid-area:bot"><span>🤖</span><b>Le bot</b><small>Node.js sur Render</small></button>
+          <button class="node" type="button" data-node="nvidia" style="grid-area:nv"><span>🧠</span><b>NVIDIA</b><small>texte + vision</small></button>
+          <button class="node" type="button" data-node="storage" style="grid-area:db"><span>💾</span><b>Stockage</b><small>MongoDB ou fichier</small></button>
+          <button class="node" type="button" data-node="media" style="grid-area:md"><span>🎵</span><b>yt-dlp + ffmpeg</b><small>musique & vidéos</small></button>
+        </div>
+        <div class="arch-foot">
+          <div class="arch-info" id="archInfo" aria-live="polite"></div>
+          <button class="btn btn-primary" id="simBtn" type="button">▶ Lancer la simulation</button>
+        </div>
+      </div>
+      <ol class="journey" id="journey">
+        <li data-reveal><span>1</span><b>Un contact t'écrit</b><p>Le message arrive sur ton téléphone… et sur le bot, connecté comme un appareil WhatsApp Web.</p></li>
+        <li data-reveal><span>2</span><b>Le bot trie</b><p>Commande du propriétaire ? IA active ici ? Groupe : mention obligatoire ? Mode <code><span class="js-prefix">.</span>meai</code> : il attend le délai.</p></li>
+        <li data-reveal><span>3</span><b>L'IA réfléchit</b><p>Le modèle NVIDIA reçoit la conversation récente (mémoire), ta personnalité, tes consignes et la description des images.</p></li>
+        <li data-reveal><span>4</span><b>La réponse part</b><p>Découpée en plusieurs messages si elle est longue, avec fichiers joints si besoin. ⚙️ s'affiche pendant qu'elle écrit.</p></li>
       </ol>
     </div>
-    <button id="showSession" class="secondary hidden">🔑 Afficher mon SESSION_ID</button>
-    <button id="logoutBtn" class="danger hidden">Déconnecter ce WhatsApp</button>
-    <div id="connMsg" class="msg"></div>
-    <p class="muted" id="noPwdHint" style="margin-top:12px">Pour afficher ton SESSION_ID ou déconnecter le bot depuis ce site, ajoute la variable <code>ADMIN_PASSWORD</code> sur Render. Tu peux aussi envoyer <code>.session</code> dans ta discussion avec toi-même.</p>
-    <p class="muted" style="margin-top:12px">Sur WhatsApp, envoie <code>.menu</code> dans ta discussion avec toi-même (« Moi ») pour voir toutes les options.</p>
   </section>
 
-  <section id="pairCard" class="hidden">
-    <div id="statusMsg" class="msg"></div>
-    <div class="tabs">
-      <button data-tab="code" class="active">🔢 Code</button>
-      <button data-tab="qr">📷 QR code</button>
-      <button data-tab="import">🔑 SESSION_ID</button>
-    </div>
-
-    <div id="tab-code" class="card">
-      <h2>Connexion avec un code</h2>
-      <label for="phone">Ton numéro WhatsApp au format international (indicatif + numéro, sans le 0)</label>
-      <input id="phone" inputmode="tel" placeholder="33612345678" autocomplete="tel">
-      <button id="pairBtn">Obtenir mon code</button>
-      <div id="pairResult" class="hidden">
-        <div id="code" class="code">----</div>
-        <div id="timer" class="timer"></div>
-        <button id="copyCode" class="secondary">📋 Copier le code</button>
-        <ol>
-          <li>Ouvre <b>WhatsApp</b> sur ton téléphone.</li>
-          <li><b>Réglages</b> (ou ⋮) → <b>Appareils connectés</b> → <b>Connecter un appareil</b>.</li>
-          <li>Touche <b>Connecter avec un numéro de téléphone</b>.</li>
-          <li>Saisis le code ci-dessus. Le bot se connecte tout seul.</li>
-        </ol>
+  <!-- ───────────── Installation ───────────── -->
+  <section id="guide" class="section">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <p class="kicker">Installation gratuite</p>
+        <h2>Ton propre bot en <span class="grad">5 étapes</span></h2>
+        <p class="lead">GitHub + Render, gratuitement. Pas besoin de base de données pour commencer.</p>
       </div>
-      <div id="pairMsg" class="msg"></div>
-    </div>
-
-    <div id="tab-qr" class="card hidden">
-      <h2>Connexion avec un QR code</h2>
-      <p class="muted">Pratique si ce site est ouvert sur un ordinateur : WhatsApp → Appareils connectés → Connecter un appareil, puis scanne le QR.</p>
-      <button id="qrBtn">Afficher le QR code</button>
-      <img id="qrImg" class="qr hidden" alt="QR code WhatsApp">
-      <div id="qrMsg" class="msg"></div>
-    </div>
-
-    <div id="tab-import" class="card hidden">
-      <h2>J'ai déjà un SESSION_ID</h2>
-      <p class="muted">Colle un SESSION_ID (il commence par <code>WAI~</code>) pour reconnecter le bot sans refaire l'appairage.</p>
-      <textarea id="importInput" placeholder="WAI~..."></textarea>
-      <button id="importBtn">Importer et se connecter</button>
-      <div id="importMsg" class="msg"></div>
+      <div class="guide">
+        <ol class="timeline">
+          <li data-reveal>
+            <span class="tl-dot">1</span>
+            <div class="tl-card glass">
+              <h3>Clé API NVIDIA</h3>
+              <p>Crée un compte sur <a href="https://build.nvidia.com" target="_blank" rel="noopener noreferrer">build.nvidia.com</a>, ouvre un modèle (par exemple <i>Nemotron 3 Nano Omni</i>) → <b>Get API Key</b> → copie la clé <code>nvapi-…</code>.</p>
+            </div>
+          </li>
+          <li data-reveal>
+            <span class="tl-dot">2</span>
+            <div class="tl-card glass">
+              <h3>Le code sur GitHub</h3>
+              <p>Crée un dépôt <b>privé</b>, puis envoie les fichiers du projet (sans <code>node_modules</code>) :</p>
+              <div class="codeblock"><pre id="gitCmds">git init
+git add .
+git commit -m "Bot WhatsApp IA"
+git branch -M main
+git remote add origin https://github.com/TON-PSEUDO/whatsapp-ai-bot.git
+git push -u origin main</pre><button class="copy-btn" type="button" data-copy-from="gitCmds">Copier</button></div>
+            </div>
+          </li>
+          <li data-reveal>
+            <span class="tl-dot">3</span>
+            <div class="tl-card glass">
+              <h3>Déploiement sur Render</h3>
+              <p>Sur <a href="https://render.com" target="_blank" rel="noopener noreferrer">render.com</a> : <b>New → Blueprint</b>, choisis ton dépôt. Render lit <code>render.yaml</code> et te demande les variables. Prépare-les ici 👇</p>
+              <div class="envgen">
+                <div class="envgen-form">
+                  <label>Nom du bot <input id="envBot" value="Nova" maxlength="40" autocomplete="off"></label>
+                  <label>Ton prénom <input id="envOwner" placeholder="Lucas" maxlength="40" autocomplete="off"></label>
+                  <label>Fuseau horaire <input id="envTz" value="Europe/Paris" maxlength="60" autocomplete="off"></label>
+                  <label class="envgen-pwd">Mot de passe du site
+                    <span class="field"><input id="envPwd" maxlength="80" autocomplete="off" spellcheck="false"><button class="field-btn" id="envPwdGen" type="button" title="Générer un mot de passe solide" aria-label="Générer un mot de passe">🎲</button></span>
+                  </label>
+                </div>
+                <div class="codeblock"><pre id="envOut"></pre><button class="copy-btn" type="button" data-copy-from="envOut">Copier</button></div>
+                <p class="field-hint">Rien n'est envoyé : tout est généré dans ton navigateur. Ajoute ta clé NVIDIA à la main.</p>
+              </div>
+            </div>
+          </li>
+          <li data-reveal>
+            <span class="tl-dot">4</span>
+            <div class="tl-card glass">
+              <h3>Connexion WhatsApp</h3>
+              <p>Ouvre l'adresse de ton service (ce site !), entre ton mot de passe puis ton numéro, et saisis le code dans WhatsApp.</p>
+              <a class="btn btn-ghost btn-sm" href="#connect">Aller à la connexion →</a>
+            </div>
+          </li>
+          <li data-reveal>
+            <span class="tl-dot">5</span>
+            <div class="tl-card glass">
+              <h3>Sauvegarde du SESSION_ID</h3>
+              <p>Render → <b>Environment</b> → <code>SESSION_ID</code> → colle la valeur → <b>Save changes</b>. Le bot redémarre et se reconnecte tout seul. ✅</p>
+            </div>
+          </li>
+        </ol>
+        <div class="extras">
+          <div class="extra glass" data-reveal>
+            <h3>💾 Garder la mémoire</h3>
+            <p>Sur Render gratuit, le disque est effacé à chaque redémarrage. Un cluster <b>MongoDB Atlas M0</b> gratuit garde réglages, discussions actives et mémoire : ajoute <code>MONGODB_URI</code>.</p>
+          </div>
+          <div class="extra glass" data-reveal>
+            <h3>😴 Rester éveillé</h3>
+            <p>Le bot se rend visite toutes les 10 minutes. Pour plus de sûreté : une sonde <a href="https://uptimerobot.com" target="_blank" rel="noopener noreferrer">UptimeRobot</a> sur <code id="healthUrl">/health</code> toutes les 5 minutes.</p>
+          </div>
+          <div class="extra glass" data-reveal>
+            <h3>🍪 YouTube bloque ?</h3>
+            <p>Exporte tes cookies YouTube au format <code>cookies.txt</code> et ajoute-les en <b>Secret File</b> sur Render (ou dans <code>YT_COOKIES</code>).</p>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
-  <footer>Bot non officiel : utilise-le de façon responsable.<br><span id="storage"></span></footer>
+  <!-- ───────────── FAQ ───────────── -->
+  <section id="faq" class="section">
+    <div class="container narrow">
+      <div class="section-head" data-reveal>
+        <p class="kicker">FAQ & dépannage</p>
+        <h2>Une question ? <span class="grad">La réponse est ici.</span></h2>
+      </div>
+      <div class="faq" id="faqList">
+        <details data-reveal><summary>« Code incorrect » dans WhatsApp</summary><p>Le code expire vite (environ 3 minutes) : redemande un code et saisis-le tout de suite. Vérifie le numéro : indicatif du pays, sans le 0 du début. L'aperçu sous le champ montre exactement ce qui est envoyé.</p></details>
+        <details data-reveal><summary>Le statut affiche « Déconnecté »</summary><p>L'appareil a été retiré dans WhatsApp : refais l'appairage puis remplace <code>SESSION_ID</code> sur Render.</p></details>
+        <details data-reveal><summary>Le statut affiche « Ouvert ailleurs »</summary><p>Le même SESSION_ID tourne à deux endroits (autre service, ton PC…) : n'en garde qu'un seul.</p></details>
+        <details data-reveal><summary>L'IA ne répond pas</summary><p>Vérifie <code>NVIDIA_API_KEY</code> (le diagnostic en haut de page t'indique si elle est présente), puis teste avec <code><span class="js-prefix">.</span>test</code>. Les erreurs arrivent dans ta discussion « Moi ».</p></details>
+        <details data-reveal><summary>« Active d'abord .ai ou .meai »</summary><p><code><span class="js-prefix">.</span>aai</code> a besoin que <code><span class="js-prefix">.</span>ai</code> ou <code><span class="js-prefix">.</span>meai</code> soit déjà actif dans la discussion.</p></details>
+        <details data-reveal><summary>Modèle indisponible (erreur 404) ou erreur 429</summary><p>404 : choisis un autre modèle avec <code><span class="js-prefix">.</span>models</code>. 429 : trop de requêtes pour ta clé NVIDIA, patiente ou augmente le délai avec <code><span class="js-prefix">.</span>delai</code>.</p></details>
+        <details data-reveal><summary>Mes réglages disparaissent après un redémarrage</summary><p>Normal sans base de données : le disque gratuit de Render est effacé à chaque redémarrage. Réactive <code><span class="js-prefix">.</span>ai</code> / <code><span class="js-prefix">.</span>meai</code> / <code><span class="js-prefix">.</span>aai</code>, ou ajoute <code>MONGODB_URI</code> pour tout garder.</p></details>
+        <details data-reveal><summary><code><span class="js-prefix">.</span>song</code> / <code><span class="js-prefix">.</span>video</code> ne marchent pas</summary><p>« YouTube bloque le serveur » : ajoute tes cookies YouTube. « Aucun format » ou erreur 403 : yt-dlp se met à jour chaque jour, redéploie pour forcer la dernière version. Fichier trop lourd : augmente <code>MEDIA_MAX_MB</code>, <code>SONG_MAX_MINUTES</code> ou <code>VIDEO_MAX_MINUTES</code>.</p></details>
+        <details data-reveal><summary>Est-ce officiel ? Est-ce que je risque quelque chose ?</summary><p>Le bot utilise <a href="https://github.com/WhiskeySockets/Baileys" target="_blank" rel="noopener noreferrer">Baileys</a>, une bibliothèque WhatsApp Web non officielle, ni fournie ni approuvée par WhatsApp/Meta. Une utilisation abusive (spam, envois en masse) peut faire bannir ton numéro. Garde-le pour un usage personnel et préviens tes proches qu'une IA peut leur répondre.</p></details>
+        <details data-reveal><summary>Qui peut utiliser les commandes ?</summary><p>Seuls <b>tes</b> messages sont lus comme des commandes. Exception : <code><span class="js-prefix">.</span>song</code> et <code><span class="js-prefix">.</span>video</code>, que tes contacts et les membres d'un groupe peuvent utiliser.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────── Appel final ───────────── -->
+  <section class="section section-tight">
+    <div class="container">
+      <div class="cta glass" data-reveal>
+        <div class="cta-glow" aria-hidden="true"></div>
+        <h2>Prêt à laisser <span class="js-botname">Nova</span> répondre ?</h2>
+        <p>Connecte ton WhatsApp, envoie <code><span class="js-prefix">.</span>ai</code> dans « Moi » et discute avec ton IA privée.</p>
+        <a class="btn btn-primary btn-lg" href="#connect">Connecter mon WhatsApp →</a>
+      </div>
+    </div>
+  </section>
 </main>
-<script>
-const $ = (id) => document.getElementById(id)
-const LABELS = {
-  idle: 'Non connecté', connecting: 'Connexion…', waiting_pair: 'En attente du code', waiting_qr: 'En attente du QR',
-  connected: 'Connecté', reconnecting: 'Reconnexion…', logged_out: 'Déconnecté', replaced: 'Ouvert ailleurs', error: 'Erreur',
-}
-const WAITING = ['connecting', 'waiting_pair', 'waiting_qr', 'reconnecting']
-const BAD = ['logged_out', 'replaced', 'error']
-const state = {
-  token: sessionStorage.getItem('pairToken') || '',
-  pwd: sessionStorage.getItem('adminPwd') || '',
-  st: null, sessionShown: false, timer: null, pairExpires: 0, pollTimer: null,
-}
 
-function msg(id, text, ok) {
-  const el = $(id)
-  el.textContent = text || ''
-  el.className = 'msg' + (text ? ' show ' + (ok ? 'ok' : 'err') : '')
-}
-function setToken(t) {
-  state.token = t || ''
-  if (t) sessionStorage.setItem('pairToken', t)
-  else sessionStorage.removeItem('pairToken')
-}
-function forgetPwd() {
-  state.pwd = ''
-  sessionStorage.removeItem('adminPwd')
-}
+<footer class="footer">
+  <div class="container footer-inner">
+    <div>
+      <b class="js-botname">Nova</b> · Bot WhatsApp IA
+      <p class="muted">Bot non officiel : utilise-le de façon responsable.<br><span id="storage"></span></p>
+    </div>
+    <nav aria-label="Liens du pied de page">
+      <a href="#features">Fonctionnalités</a>
+      <a href="#commands">Commandes</a>
+      <a href="#guide">Installation</a>
+      <a href="#faq">FAQ</a>
+      <a href="/health" target="_blank" rel="noopener">État du serveur</a>
+    </nav>
+  </div>
+</footer>
 
-async function api(path, { method = 'GET', body } = {}) {
-  const headers = {}
-  if (body) headers['Content-Type'] = 'application/json'
-  if (state.pwd) headers['x-admin-password'] = encodeURIComponent(state.pwd)
-  if (state.token) headers['x-pair-token'] = state.token
-  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const err = new Error(data.error || 'Erreur ' + res.status)
-    err.status = res.status
-    if (res.status === 401) { forgetPwd(); setTimeout(refresh, 0) }
-    throw err
-  }
-  return data
-}
+<!-- Calques : retour en haut, notifications, confirmation, recherche rapide -->
+<button class="to-top" id="toTop" type="button" aria-label="Revenir en haut">↑</button>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
-function showCode(code, expiresAt) {
-  $('code').textContent = code
-  $('pairResult').classList.remove('hidden')
-  state.pairExpires = expiresAt || Date.now() + 180000
-  if (!state.timer) state.timer = setInterval(tick, 1000)
-  tick()
-}
-function tick() {
-  const left = Math.max(0, Math.round((state.pairExpires - Date.now()) / 1000))
-  $('timer').textContent = left
-    ? 'Code valable encore ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0')
-    : 'Code expiré : demande un nouveau code.'
-  if (!left) stopTimer()
-}
-function stopTimer() {
-  clearInterval(state.timer)
-  state.timer = null
-}
+<div class="overlay hidden" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="dialog glass">
+    <div class="dialog-ico">⚠️</div>
+    <h3 id="modalTitle">Déconnecter ce WhatsApp ?</h3>
+    <p id="modalText">Il faudra refaire l'appairage et remplacer SESSION_ID sur Render.</p>
+    <div class="row">
+      <button class="btn btn-ghost" id="modalCancel" type="button">Annuler</button>
+      <button class="btn btn-danger-solid" id="modalOk" type="button">Déconnecter</button>
+    </div>
+  </div>
+</div>
 
-async function loadSession() {
-  if (state.sessionShown) return
-  state.sessionShown = true
-  try {
-    const { sessionId } = await api('/api/session')
-    $('sessionId').value = sessionId
-    $('sessionBox').classList.remove('hidden')
-    $('showSession').classList.add('hidden')
-    msg('connMsg', '')
-  } catch (e) {
-    state.sessionShown = false
-    msg('connMsg', e.message)
-  }
-}
+<div class="overlay overlay-top hidden" id="palette" role="dialog" aria-modal="true" aria-label="Recherche rapide">
+  <div class="palette glass">
+    <label class="palette-search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="paletteInput" placeholder="Aller à une section, une commande, une action…" autocomplete="off" aria-label="Recherche rapide" aria-controls="paletteList">
+      <kbd>Échap</kbd>
+    </label>
+    <ul class="palette-list" id="paletteList" role="listbox"></ul>
+    <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span><span><kbd>Entrée</kbd> ouvrir</span><span><kbd>Ctrl</kbd>+<kbd>K</kbd> ouvrir/fermer</span></div>
+  </div>
+</div>
 
-function render(st) {
-  state.st = st
-  const name = st.botName || 'Bot'
-  $('title').textContent = name + ' — WhatsApp IA'
-  document.title = 'Connexion WhatsApp — ' + name
-  const badge = $('badge')
-  badge.textContent = LABELS[st.status] || st.status
-  badge.className = 'badge' + (st.connected ? ' ok' : WAITING.includes(st.status) ? ' wait' : BAD.includes(st.status) ? ' err' : '')
-  $('storage').textContent = st.storage === 'mongodb' ? 'Stockage : MongoDB ✅' : 'Stockage : fichier local (garde ton SESSION_ID à jour sur Render)'
-  const linked = st.connected || (st.hasSession && ['connecting', 'reconnecting'].includes(st.status))
-  const needPwd = st.needsPassword && !state.pwd
-  $('pwdCard').classList.toggle('hidden', !needPwd)
-  $('connectedCard').classList.toggle('hidden', !linked)
-  $('pairCard').classList.toggle('hidden', linked || needPwd)
-  if (linked) {
-    stopTimer()
-    $('who').textContent = st.me ? 'Compte : ' + [st.me.name, st.me.number].filter(Boolean).join(' • ') : 'Reconnexion en cours…'
-    $('logoutBtn').classList.toggle('hidden', !(st.needsPassword && state.pwd))
-    $('noPwdHint').classList.toggle('hidden', st.needsPassword)
-    $('showSession').classList.toggle('hidden', state.sessionShown || !st.connected || !(state.pwd || st.sessionAvailable))
-    if (st.sessionAvailable) loadSession()
-    return
-  }
-  state.sessionShown = false
-  $('sessionBox').classList.add('hidden')
-  if (st.pairing && st.pairing.code) showCode(st.pairing.code, st.pairing.expiresAt)
-  if (st.qr) {
-    $('qrImg').src = st.qr
-    $('qrImg').classList.remove('hidden')
-  } else if (st.status !== 'waiting_qr') {
-    $('qrImg').classList.add('hidden')
-  }
-  msg('statusMsg', BAD.includes(st.status) || st.status === 'idle' ? st.lastError || '' : '')
-}
-
-async function refresh() {
-  clearTimeout(state.pollTimer)
-  try {
-    render(await api('/api/status'))
-  } catch {
-    $('badge').textContent = 'Hors ligne'
-    $('badge').className = 'badge err'
-  }
-  state.pollTimer = setTimeout(refresh, state.st && state.st.connected ? 10000 : 3000)
-}
-
-async function copy(text, btn) {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    document.body.appendChild(ta)
-    ta.select()
-    document.execCommand('copy')
-    ta.remove()
-  }
-  const old = btn.textContent
-  btn.textContent = '✅ Copié !'
-  setTimeout(() => { btn.textContent = old }, 1500)
-}
-
-$('pwdBtn').onclick = async () => {
-  const pwd = $('pwd').value
-  if (!pwd) return msg('pwdMsg', 'Entre le mot de passe.')
-  $('pwdBtn').disabled = true
-  try {
-    const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pwd }) })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Mot de passe incorrect.')
-    state.pwd = pwd
-    sessionStorage.setItem('adminPwd', pwd)
-    $('pwd').value = ''
-    msg('pwdMsg', '')
-    refresh()
-  } catch (e) {
-    msg('pwdMsg', e.message)
-  } finally {
-    $('pwdBtn').disabled = false
-  }
-}
-$('pwd').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pwdBtn').click() })
-
-$('pairBtn').onclick = async () => {
-  const phone = $('phone').value.replace(/\D/g, '')
-  if (phone.length < 8) return msg('pairMsg', 'Numéro invalide : indicatif du pays + numéro, par exemple 33612345678.')
-  const btn = $('pairBtn')
-  btn.disabled = true
-  btn.textContent = "Demande en cours… (jusqu'à 45 s)"
-  msg('pairMsg', '')
-  try {
-    const r = await api('/api/pair', { method: 'POST', body: { phone } })
-    setToken(r.token)
-    showCode(r.code, r.expiresAt)
-    msg('pairMsg', 'Code prêt ! Saisis-le vite dans WhatsApp.', true)
-  } catch (e) {
-    msg('pairMsg', e.message)
-  } finally {
-    btn.disabled = false
-    btn.textContent = 'Obtenir un nouveau code'
-  }
-}
-$('phone').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pairBtn').click() })
-$('copyCode').onclick = () => copy($('code').textContent.replace(/-/g, ''), $('copyCode'))
-
-$('qrBtn').onclick = async () => {
-  const btn = $('qrBtn')
-  btn.disabled = true
-  msg('qrMsg', '')
-  try {
-    const r = await api('/api/qr', { method: 'POST' })
-    setToken(r.token)
-    $('qrImg').src = r.qr
-    $('qrImg').classList.remove('hidden')
-    msg('qrMsg', 'Scanne le QR avec WhatsApp. Il se renouvelle automatiquement.', true)
-  } catch (e) {
-    msg('qrMsg', e.message)
-  } finally {
-    btn.disabled = false
-  }
-}
-
-$('importBtn').onclick = async () => {
-  const sessionId = $('importInput').value.trim()
-  if (!sessionId) return msg('importMsg', 'Colle ton SESSION_ID.')
-  $('importBtn').disabled = true
-  try {
-    await api('/api/import', { method: 'POST', body: { sessionId } })
-    $('importInput').value = ''
-    msg('importMsg', 'Session importée, connexion en cours…', true)
-    refresh()
-  } catch (e) {
-    msg('importMsg', e.message)
-  } finally {
-    $('importBtn').disabled = false
-  }
-}
-
-$('showSession').onclick = () => loadSession()
-$('copySession').onclick = () => copy($('sessionId').value, $('copySession'))
-$('logoutBtn').onclick = async () => {
-  if (!confirm("Déconnecter ce WhatsApp du bot ? Il faudra refaire l'appairage et remplacer SESSION_ID sur Render.")) return
-  try {
-    await api('/api/logout', { method: 'POST' })
-    state.sessionShown = false
-    $('sessionBox').classList.add('hidden')
-    setToken('')
-    refresh()
-  } catch (e) {
-    msg('connMsg', e.message)
-  }
-}
-
-document.querySelectorAll('.tabs button').forEach((btn) => {
-  btn.onclick = () => {
-    document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b === btn))
-    for (const t of ['code', 'qr', 'import']) $('tab-' + t).classList.toggle('hidden', t !== btn.dataset.tab)
-  }
-})
-
-refresh()
-</script>
+<script src="/assets/scene.js?v=6" defer></script>
+<script src="/assets/app.js?v=6" defer></script>
 </body>
 </html>

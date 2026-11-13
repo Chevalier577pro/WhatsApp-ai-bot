@@ -1036,5 +1036,6 @@ export function createCommands(bot) {
     COMMANDS,
     MENU,
     HELP,
+    HELP_CATS,
   }
 }
