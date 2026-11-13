@@ -476,6 +476,20 @@ export class WhatsAppManager extends EventEmitter {
     return !!id && this.sentMessages.get(id) !== undefined
   }
 
+  /** Réaction à un message (texte vide = retire la réaction). */
+  async react(jid, key, text) {
+    const sock = this.sock
+    if (!sock || !this.connected || !key?.id) return false
+    try {
+      const msg = await sock.sendMessage(jid, { react: { text: text || '', key } })
+      if (msg?.key?.id) this.sentMessages.set(msg.key.id, msg.message || true)
+      return true
+    } catch (err) {
+      this.log.debug?.({ err: err?.message }, 'Réaction impossible')
+      return false
+    }
+  }
+
   /** Contenu (Buffer) d'un message média reçu, ex : une image à montrer à l'IA. */
   async downloadMedia(msg) {
     const sock = this.sock

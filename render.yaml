@@ -11,7 +11,7 @@ services:
       - key: NODE_VERSION
         value: "22"
       - key: NVIDIA_MODEL
-        value: nvidia/nemotron-3-ultra-550b-a55b
+        value: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
       - key: PREFIX
         value: "."
       - key: TIME_ZONE

@@ -305,7 +305,7 @@ export function createCommands(bot) {
     emoji: '🧩',
     label: 'Mémoire',
     min: 2,
-    max: 100,
+    max: 500,
     unit: ' messages',
     hint: "Nombre de messages récents dont l'IA se souvient dans chaque discussion.",
   })
@@ -386,14 +386,16 @@ export function createCommands(bot) {
     return say(`✅ Réponse en ${((Date.now() - t0) / 1000).toFixed(1)} s :\n\n${r.text}`, r.files)
   }
 
-  async function ask({ t, arg, say, sayHere }) {
+  async function ask({ t, arg, say, sayHere, ctx }) {
     const q = String(arg || '').trim()
     if (!q) return say(`❓ *${P}ask <question>* : l'IA répond directement dans cette discussion.`)
     await wa.presence(t.chat, 'composing')
+    const gear = await bot.react(ctx, '⚙️')
     try {
       const r = await ai.ask(q, { ownerName: bot.ownerName() })
       return await (sayHere || say)(r.text, r.files)
     } finally {
+      if (gear) await bot.react(ctx, '')
       await wa.presence(t.chat, 'paused')
     }
   }
@@ -520,7 +522,7 @@ export function createCommands(bot) {
     { cat: 'perso', cmd: 'nom', args: '<nom>', short: 'nom du bot', examples: ['nom Nova'] },
     { cat: 'reglages', cmd: 'temp', args: '<0-2>', short: 'créativité des réponses', detail: '0 = précis et constant • 0.7 = équilibré • 1.2+ = très créatif.', examples: ['temp 0.7'] },
     { cat: 'reglages', cmd: 'tokens', args: '<64-8192 ou illimite>', short: 'longueur max des réponses', detail: "1 token ≈ 0,75 mot. *illimite* (ou 0) : plus de limite, le modèle s'arrête à sa propre limite et les longues réponses arrivent en plusieurs messages. Augmente-la pour les gros fichiers.", examples: ['tokens 2048', 'tokens illimite'] },
-    { cat: 'reglages', cmd: 'memoire', args: '<2-100>', short: 'messages retenus par discussion', examples: ['memoire 30'] },
+    { cat: 'reglages', cmd: 'memoire', args: '<2-500>', short: 'messages retenus par discussion', examples: ['memoire 30'] },
     { cat: 'reglages', cmd: 'delai', args: '<0-120>', short: "secondes d'attente avant de répondre", detail: "J'attends ce délai pour regrouper les messages envoyés à la suite.", examples: ['delai 5'] },
     { cat: 'reglages', cmd: 'groupes', args: 'tout/mention', short: 'en groupe : répondre à tout, ou seulement si on te mentionne', examples: ['groupes mention'] },
     { cat: 'reglages', cmd: 'discret', args: '[on/off]', short: 'efface tes commandes et répond dans « Moi »' },
@@ -691,7 +693,7 @@ export function createCommands(bot) {
           icon: '🧩',
           label: 'Mémoire',
           value: () => `_${settings.get('memory')} messages_`,
-          run: (a) => askFor(a, 'memoire', `🧩 Mémoire actuelle : *${settings.get('memory')} messages*\n\nEnvoie un nombre entre 2 et 100.`),
+          run: (a) => askFor(a, 'memoire', `🧩 Mémoire actuelle : *${settings.get('memory')} messages*\n\nEnvoie un nombre entre 2 et 500.`),
         },
         {
           icon: '⏱️',

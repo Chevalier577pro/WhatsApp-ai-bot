@@ -372,6 +372,17 @@ export class Bot {
     return { isGroup: false, name: this.label(ctx.chat) }
   }
 
+  /** Réaction de statut : ⚙️ pendant la réponse, retirée une fois répondue. */
+  async react(ctx, text) {
+    if (typeof this.wa.react !== 'function' || !ctx?.key?.id) return false
+    try {
+      return await this.wa.react(ctx.key.remoteJid || ctx.chat, ctx.key, text)
+    } catch (err) {
+      this.log.debug?.({ err: err?.message }, 'Réaction impossible')
+      return false
+    }
+  }
+
   async respond(ctx, mode) {
     const { chat } = ctx
     if (this.busy.has(chat)) {
@@ -385,6 +396,7 @@ export class Bot {
     const toOwner = ctx.self || mode === 'aai'
     if (!last || last.r !== (toOwner ? 'me' : 'them')) return
     this.busy.add(chat)
+    const gear = await this.react(ctx, '⚙️')
     try {
       await this.wa.presence(chat, 'composing')
       history = await this.seeImages(ctx, history)
@@ -404,6 +416,7 @@ export class Bot {
     } catch (err) {
       await this.notifyError(err, ctx)
     } finally {
+      if (gear) await this.react(ctx, '')
       this.busy.delete(chat)
       await this.wa.presence(chat, 'paused')
       const next = this.again.get(chat)

@@ -1,6 +1,15 @@
 import { config } from './config.js'
 
+const DEFAULTS_VERSION = 2
+// Anciennes valeurs par défaut : mises à jour une seule fois, sans toucher aux choix explicites.
+const LEGACY_DEFAULTS = {
+  model: 'nvidia/nemotron-3-ultra-550b-a55b',
+  maxTokens: 1024,
+  memory: 20,
+}
+
 export const DEFAULT_SETTINGS = () => ({
+  defaultsVersion: DEFAULTS_VERSION,
   botName: config.botName || 'Nova',
   ownerName: config.ownerName || '',
   personality: 'amical, drôle, naturel et serviable',
@@ -9,8 +18,8 @@ export const DEFAULT_SETTINGS = () => ({
   visionModel: config.nvidiaVisionModel,
   vision: true, // l'IA regarde les images reçues
   temperature: 0.7,
-  maxTokens: 1024, // 0 = illimité (aucune limite envoyée au modèle)
-  memory: 20,
+  maxTokens: 0, // 0 = illimité (aucune limite envoyée au modèle)
+  memory: 500,
   replyDelay: 2,
   groupMode: 'all', // 'all' = répond à tout | 'mention' = seulement si on te mentionne / te répond
   signature: false,
@@ -22,7 +31,9 @@ export const DEFAULT_SETTINGS = () => ({
 export class Settings {
   constructor(kv) {
     this.kv = kv
-    this.data = { ...DEFAULT_SETTINGS(), ...(kv.get('settings') || {}) }
+    const saved = kv.get('settings') || {}
+    this.data = { ...DEFAULT_SETTINGS(), ...saved }
+    this.#migrate(saved)
     this.aiChats = new Set(kv.get('aiChats') || [])
     this.meaiChats = new Set(kv.get('meaiChats') || [])
     this.aaiChats = new Set(kv.get('aaiChats') || []) // .aai : l'IA te répond aussi à toi
@@ -53,6 +64,17 @@ export class Settings {
 
   all() {
     return { ...this.data }
+  }
+
+  /** Passe les anciennes valeurs par défaut aux nouvelles (une seule fois). */
+  #migrate(saved) {
+    if (saved.defaultsVersion === DEFAULTS_VERSION) return
+    const d = DEFAULT_SETTINGS()
+    if (saved.model === LEGACY_DEFAULTS.model) this.data.model = d.model
+    if (saved.maxTokens === LEGACY_DEFAULTS.maxTokens) this.data.maxTokens = d.maxTokens
+    if (saved.memory === LEGACY_DEFAULTS.memory) this.data.memory = d.memory
+    this.data.defaultsVersion = DEFAULTS_VERSION
+    if (Object.keys(saved).length) this.save()
   }
 
   #set(mode) {

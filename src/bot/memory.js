@@ -18,7 +18,7 @@ export class Memory {
   }
 
   #limit() {
-    return Math.max(2, Math.min(100, Number(this.getLimit()) || 20))
+    return Math.max(2, Math.min(500, Number(this.getLimit()) || 500))
   }
 
   get(chat) {

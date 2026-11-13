@@ -102,6 +102,8 @@ await test('Réglages : valeurs par défaut, modification, modes par discussion'
   const kv = await newKv('settings')
   const s = new Settings(kv)
   assert.equal(s.get('memory'), DEFAULT_SETTINGS().memory)
+  assert.equal(s.get('memory'), 500)
+  assert.equal(s.get('maxTokens'), 0, 'tokens illimités par défaut')
   s.set('temperature', 1.2)
   assert.equal(s.get('temperature'), 1.2)
   const ids = ['33611111111@s.whatsapp.net', '123456@lid']
@@ -110,6 +112,22 @@ await test('Réglages : valeurs par défaut, modification, modes par discussion'
   assert.ok(s.isActive('ai', ids))
   s.setActive('ai', ids, false)
   assert.equal(s.isActive('ai', ids), false)
+  await kv.close()
+})
+
+await test('Réglages : les anciennes valeurs par défaut passent aux nouvelles', async () => {
+  const kv = await newKv('settings-migrate')
+  kv.set('settings', {
+    model: 'nvidia/nemotron-3-ultra-550b-a55b',
+    maxTokens: 1024,
+    memory: 20,
+    temperature: 1.1,
+  })
+  const s = new Settings(kv)
+  assert.equal(s.get('model'), DEFAULT_SETTINGS().model)
+  assert.equal(s.get('maxTokens'), 0)
+  assert.equal(s.get('memory'), 500)
+  assert.equal(s.get('temperature'), 1.1, 'les réglages choisis sont conservés')
   await kv.close()
 })
 
@@ -249,6 +267,7 @@ class FakeWA extends EventEmitter {
     this.pairing = null
     this.sent = []
     this.deleted = []
+    this.reactions = []
     this.botIds = new Set()
     this.count = 0
   }
@@ -270,6 +289,11 @@ class FakeWA extends EventEmitter {
     this.botIds.add(id)
     this.sent.push({ jid, text: content?.text ?? '', content, options })
     return { key: { id, remoteJid: jid, fromMe: true } }
+  }
+
+  async react(jid, key, text) {
+    this.reactions.push({ jid, key, text })
+    return true
   }
 
   async presence() {}
@@ -626,6 +650,7 @@ await test("Bot : l'IA voit les images, envoie des fichiers, tokens illimités",
   assert.equal(ai.looked[0].mimetype, 'image/jpeg')
   assert.ok(ai.calls.at(-1).history.some((e) => e.t === '[image : Un chat roux dort sur un canapé bleu.]'))
   const out = wa.sent.slice(n).filter((s) => s.jid === friend)
+  assert.deepEqual(wa.reactions.map((r) => r.text), ['⚙️', ''], 'engrenage pendant la réponse, retiré ensuite')
   assert.equal(out[0].text, 'Voici ta page !')
   assert.equal(out[1].content.fileName, 'page.html')
   assert.equal(out[1].content.mimetype, 'text/html')
@@ -794,6 +819,8 @@ await test('Bot : .help par thème, .help <commande>, menu détaillé qui reste 
   await up('.help .tokens')
   assert.match(last(), /📖 \*\.tokens\*/)
   assert.match(last(), /\*Exemples\*\n- \.tokens 2048\n- \.tokens illimite/)
+  await up('.help .memoire')
+  assert.match(last(), /📖 \*\.memoire\* <2-500>/)
   await up('.help ia')
   assert.match(last(), /📖 \*\.ai\* \[on\/off\]/)
   assert.match(last(), /Autres noms : \.ia/)
@@ -806,7 +833,7 @@ await test('Bot : .help par thème, .help <commande>, menu détaillé qui reste 
   await up('.menu')
   txt = last()
   assert.match(txt, /\*🧠 Intelligence\*/)
-  assert.match(txt, /Longueur max — _1024 tokens_/)
+  assert.match(txt, /Longueur max — _illimitée ♾️_/)
   assert.match(txt, /Vision des images — ✅/)
   assert.match(txt, /Me répondre aussi — ⛔/)
   const num = (label) => String(txt.match(new RegExp(`\\*(\\d+)\\.\\* \\S+ ${label}`))[1])

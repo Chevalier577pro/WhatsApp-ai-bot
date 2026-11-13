@@ -1,6 +1,6 @@
 # 🤖 Bot WhatsApp IA (NVIDIA)
 
-Un bot WhatsApp **100 % en français**, propulsé par les modèles IA de **NVIDIA** (Nemotron 3 Ultra par défaut, et tous les autres modèles du catalogue NVIDIA).
+Un bot WhatsApp **100 % en français**, propulsé par les modèles IA de **NVIDIA** (Nemotron 3 Nano Omni 30B par défaut, et tous les autres modèles du catalogue NVIDIA).
 Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à un **site d'appairage** : tu entres ton numéro, tu reçois un code, c'est connecté.
 
 ## ✨ Fonctionnalités
@@ -13,7 +13,7 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 - 💬 **IA privée** : active `.ai` dans ta discussion « Moi » pour discuter avec ton IA.
 - 👁️ **L'IA voit les images** : une photo reçue (avec ou sans légende) est regardée par un modèle de vision NVIDIA avant la réponse (`.vision` pour régler).
 - 📎 **L'IA envoie des fichiers** : demande-lui une page `.html`, un `.txt`, un `.csv`, du code… elle l'envoie en pièce jointe (avec `.ai`, `.aai` et `.ask`, pas avec `.meai`).
-- ♾️ **Longueur illimitée** possible : `.tokens illimite` ; les longues réponses arrivent en plusieurs messages.
+- ♾️ **Longueur illimitée par défaut** (`.tokens <n>` pour limiter) ; les longues réponses arrivent en plusieurs messages.
 - 📋 **Menu numéroté** (`.menu`, options 1 à 21 et 0, par thèmes) : affiche tes réglages actuels et reste ouvert pour enchaîner les numéros.
 - 📖 **`.help`** : toutes les commandes par thème ; **`.help <commande>`** donne le détail, des exemples et les autres noms (ex. `.help tokens`).
 - 🎵 **`.song`** et 🎬 **`.video`** : un titre (ou un lien) → miniature → choix **MP3 / audio WhatsApp** ou **MP4 / vidéo WhatsApp**. Accessibles **à tout le monde**, pas seulement à toi.
@@ -21,7 +21,7 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 - 🔒 **Commandes réservées au propriétaire** : seuls TES messages sont lus comme des commandes, sauf `.song` et `.video` (ouverts à tous).
 - 🕶️ **Mode discret** : tes commandes sont effacées et les réponses arrivent dans ta discussion « Moi ».
 - 👥 **Groupes** : réponse à tous les messages ou seulement quand on te mentionne.
-- 🧩 Mémoire par discussion, personnalité, consignes perso, température, délai de réponse, signature…
+- 🧩 Mémoire par discussion (**500 messages retenus par défaut**), personnalité, consignes perso, température, délai de réponse, signature…
 - ☁️ **Prêt pour GitHub + Render** (`render.yaml` inclus) : fonctionne **sans base de données** (MongoDB en option).
 
 ## 🚀 Installation gratuite en 5 étapes
@@ -29,7 +29,7 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 ### 1. Clé API NVIDIA
 
 1. Crée un compte sur [build.nvidia.com](https://build.nvidia.com).
-2. Ouvre un modèle (par exemple *Nemotron 3 Ultra*) → **Get API Key** → copie la clé (`nvapi-…`).
+2. Ouvre un modèle (par exemple *Nemotron 3 Nano Omni*) → **Get API Key** → copie la clé (`nvapi-…`).
 
 ### 2. Base de données (facultatif)
 
@@ -144,8 +144,8 @@ Pour le modèle : un **numéro** pour choisir, **+** pour la page suivante, ou u
 | `.owner <prénom>` | Ton prénom |
 | `.nom <nom>` | Nom de l'assistant |
 | `.temp <0 à 2>` | Créativité des réponses |
-| `.tokens <64 à 8192>` · `.tokens illimite` | Longueur max des réponses · aucune limite (le modèle s'arrête à sa propre limite) |
-| `.memoire <2 à 100>` | Nombre de messages mémorisés par discussion |
+| `.tokens <64 à 8192>` · `.tokens illimite` | Longueur max des réponses (illimitée par défaut) · aucune limite (le modèle s'arrête à sa propre limite) |
+| `.memoire <2 à 500>` | Nombre de messages mémorisés par discussion (500 par défaut) |
 | `.delai <0 à 120>` | Secondes d'attente avant de répondre |
 | `.groupes tout` · `.groupes mention` | En groupe : répondre à tout · seulement si on te mentionne |
 | `.discret on/off` | Mode discret |
@@ -208,7 +208,7 @@ Ces deux commandes sont **ouvertes à tout le monde** : tes contacts et les memb
 | `SESSION_ID` | Session WhatsApp (après l'appairage) | — |
 | `MONGODB_URI` | Facultatif : base MongoDB pour garder réglages et mémoire | — |
 | `MONGODB_DB` | Nom de la base MongoDB | `whatsapp_ai_bot` |
-| `NVIDIA_MODEL` | Modèle utilisé au départ | `nvidia/nemotron-3-ultra-550b-a55b` |
+| `NVIDIA_MODEL` | Modèle utilisé au départ | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` |
 | `NVIDIA_VISION_MODEL` | Modèle qui regarde les images (doit accepter les images) | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
 | `NVIDIA_BASE_URL` | Adresse de l'API NVIDIA | `https://integrate.api.nvidia.com/v1` |
 | `OWNER_NAME` | Ton prénom | nom de ton profil WhatsApp |
