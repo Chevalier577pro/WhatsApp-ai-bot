@@ -34,7 +34,7 @@ import {
 } from '../src/media/youtube.js'
 import { WA_INLINE_MAX_BYTES, buildMediaMessage, parseMediaChoice, previewText } from '../src/bot/media.js'
 import { extractFiles, cleanFileName, mimeFor } from '../src/ai/files.js'
-import { splitReply } from '../src/ai/engine.js'
+import { splitReply, buildMessages } from '../src/ai/engine.js'
 import { fitImage, INLINE_MAX_B64 } from '../src/media/image.js'
 import { findFfmpeg, runProcess } from '../src/media/tools.js'
 import { AIError } from '../src/ai/nvidia.js'
@@ -632,7 +632,7 @@ await test("Bot : l'IA voit les images, envoie des fichiers, tokens illimités",
   assert.equal(out[1].content.document.toString(), '<h1>Salut</h1>')
   const mem = bot.memory.get(friend)
   assert.ok(!mem.some((e) => e.i), "l'image n'est regardée qu'une fois")
-  assert.match(mem.at(-1).t, /\[📎 fichier envoyé : page\.html\]/)
+  assert.deepEqual(mem.at(-1).f, [{ n: 'page.html', c: '<h1>Salut</h1>' }], "le contenu du fichier est gardé pour l'IA")
 
   // message suivant : pas de nouveau téléchargement
   await up(incoming(friend, 'Tu peux la modifier ?'), 200)
@@ -672,6 +672,98 @@ await test("Bot : l'IA voit les images, envoie des fichiers, tokens illimités",
   assert.equal(settings.get('maxTokens'), 0, 'dans le menu, 0 = illimité')
   await up(incoming(self, '.reglages', { fromMe: true }))
   assert.match(wa.sent.at(-1).text, /Longueur max : illimitée/)
+  await kv.close()
+})
+
+await test("Fichiers : chaque demande envoie un vrai fichier (l'IA ne recopie plus « fichier envoyé »)", async () => {
+  const kv = await newKv('bot-files-again')
+  const settings = new Settings(kv)
+  settings.set('replyDelay', 0)
+  const wa = new FakeWA()
+  // Comme le vrai modèle : il imite sa réponse précédente, sinon il écrit le fichier
+  let version = 0
+  const client = {
+    configured: true,
+    listModels: async () => [],
+    chat: async ({ messages }) => {
+      const prev = messages.filter((m) => m.role === 'assistant').at(-1)
+      version++
+      return { text: prev ? prev.content.replace(/version \d+/, `version ${version}`) : 'Voilà !\n<file name="notes.txt">\nversion 1\n</file>' }
+    },
+  }
+  const ai = new AIEngine({ client, settings, timeZone: 'Europe/Paris' })
+  const bot = new Bot({ wa, kv, settings, ai, config: { prefix: '.', botName: 'Nova', ownerName: '' }, log: silent })
+  const friend = '33644444444@s.whatsapp.net'
+  const up = async (msg, wait = 80) => {
+    await bot.onUpsert({ messages: [msg], type: 'notify' })
+    await sleep(wait)
+  }
+  await up(incoming(friend, '.ai', { fromMe: true }))
+  await up(incoming(friend, 'Envoie-moi un txt'))
+  await up(incoming(friend, 'Un autre stp'))
+  await up(incoming(friend, 'Et encore un'))
+  const docs = wa.sent.filter((s) => s.jid === friend && s.content?.document)
+  assert.deepEqual(
+    docs.map((d) => d.content.document.toString()),
+    ['version 1', 'version 2', 'version 3'],
+  )
+  assert.ok(!wa.sent.some((s) => s.text.includes('📎')))
+  await kv.close()
+})
+
+await test('Fichiers : fichier annoncé mais pas écrit → nouvelle tentative, sinon mention retirée', async () => {
+  const kv = await newKv('engine-fake-file')
+  const settings = new Settings(kv)
+  let calls = []
+  let answers = []
+  const client = {
+    configured: true,
+    chat: async ({ messages }) => {
+      calls.push(messages)
+      return { text: answers[Math.min(calls.length, answers.length) - 1] }
+    },
+  }
+  const engine = new AIEngine({ client, settings, timeZone: 'Europe/Paris' })
+  const ask = async (list) => {
+    calls = []
+    answers = list
+    return engine.ask('fais-moi un txt')
+  }
+
+  let r = await ask(['Voilà ! [📎 fichier envoyé : a.txt]', 'Voilà !\n<file name="a.txt">\nok\n</file>'])
+  assert.equal(r.files[0].name, 'a.txt')
+  assert.equal(r.text, 'Voilà !')
+  assert.equal(calls[1].at(-2).role, 'assistant')
+  assert.match(calls[1].at(-1).content, /aucune balise <file>/)
+
+  r = await ask(['Voilà ! [📎 fichier envoyé : a.txt]'])
+  assert.equal(calls.length, 2, 'une seule nouvelle tentative')
+  assert.deepEqual([r.text, r.files.length], ['Voilà !', 0], 'la fausse mention est retirée')
+  r = await ask(['[📎 fichier envoyé : a.txt]'])
+  assert.match(r.text, /pas réussi à créer le fichier/)
+
+  r = await ask(['Je ne peux pas, désolé.'])
+  assert.equal(calls.length, 1, 'réponse normale : pas de 2e appel')
+  r = await ask(["C'est fait, je t'ai envoyé le fichier !", 'Le voici :\n<file name="b.txt">\nok\n</file>'])
+  assert.equal(r.files[0].name, 'b.txt')
+
+  // nom sans guillemets accepté ; vieilles mentions retirées de l'historique
+  assert.equal(extractFiles('<file name=c.csv>\na;b\n</file>').files[0].name, 'c.csv')
+  const msgs = buildMessages({
+    mode: 'ai',
+    settings: settings.all(),
+    history: [
+      { r: 'them', t: 'un txt stp', ts: 1 },
+      { r: 'bot', m: 'ai', t: 'Voilà !\n[📎 fichier envoyé : a.txt]', ts: 2 },
+      { r: 'bot', m: 'ai', t: '', f: [{ n: 'b.txt', c: 'contenu' }], ts: 3 },
+      { r: 'them', t: 'encore', ts: 4 },
+    ],
+    chat: { isGroup: false, name: 'Bob' },
+    timeZone: 'Europe/Paris',
+  })
+  const assistant = msgs.filter((m) => m.role === 'assistant').map((m) => m.content).join('\n')
+  assert.ok(!assistant.includes('📎'), assistant)
+  assert.equal(assistant, 'Voilà !\n<file name="b.txt">\ncontenu\n</file>')
   await kv.close()
 })
 

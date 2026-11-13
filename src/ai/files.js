@@ -29,7 +29,9 @@ const MIME = {
   rtf: 'application/rtf',
 }
 
-const OPEN = /<(file|fichier)\s+(?:name|nom)\s*=\s*["']([^"'\n<>]{1,150})["']\s*>/i
+// Nom entre guillemets ou non : <file name="a.txt">, <file name='a.txt'>, <file name=a.txt>
+const OPEN = /<(file|fichier)\s+(?:file)?(?:name|nom)\s*=\s*(?:"([^"\n<>]{1,150})"|'([^'\n<>]{1,150})'|([^\s"'<>]{1,150}))\s*>/i
+const MEMORY_MAX = 1500 // caractères d'un fichier gardés dans la mémoire de l'IA
 
 export function mimeFor(name) {
   const ext = String(name || '').split('.').pop().toLowerCase()
@@ -76,7 +78,7 @@ export function extractFiles(raw) {
     rest = close ? after.slice(close.index + close[0].length) : ''
     const content = unfence(body.replace(/^\r?\n/, '').replace(/\r?\n[ \t]*$/, ''))
     if (!content.trim() || files.length >= MAX_FILES) continue
-    const name = cleanFileName(open[2])
+    const name = cleanFileName(open[2] ?? open[3] ?? open[4])
     let buf = Buffer.from(content, 'utf8')
     if (buf.length > MAX_BYTES) buf = buf.subarray(0, MAX_BYTES)
     files.push({ name, mimetype: mimeFor(name), content: buf, truncated: !close })
@@ -89,5 +91,30 @@ export function extractFiles(raw) {
   return { text: text.trim(), files }
 }
 
-/** Ce que l'IA retrouve dans sa mémoire à la place du fichier envoyé. */
-export const fileMemo = (name) => `[📎 fichier envoyé : ${name}]`
+/**
+ * Fichier tel que l'IA le retrouve dans sa mémoire : avec les vraies balises, pour qu'elle
+ * reprenne ce format (une simple mention « fichier envoyé » était recopiée sans rien envoyer).
+ */
+export function fileForMemory(file) {
+  const c = Buffer.isBuffer(file.content) ? file.content.toString('utf8') : String(file.content ?? '')
+  return { n: String(file.name).slice(0, 100), c: c.slice(0, MEMORY_MAX), ...(c.length > MEMORY_MAX ? { cut: 1 } : {}) }
+}
+
+export const fileFromMemory = (f) => `<file name="${f.n}">\n${f.c}\n</file>${f.cut ? '\n(début du fichier seulement)' : ''}`
+
+/** Ancienne trace mémorisée à la place des fichiers (à retirer des vieux historiques). */
+export const LEGACY_MEMO = /\n?\[📎 fichier envoyé : [^\]\n]*\]/g
+
+/** La réponse annonce-t-elle un fichier ? (à vérifier quand aucun fichier n'a été extrait) */
+export function claimsFile(text) {
+  return /📎|<\/?(file|fichier)\b|ci-joint|pi[eè]ce jointe|(fichier|document)[^\n]{0,40}envoy|envoy[^\n]{0,40}(fichier|document)|voici[^\n]{0,30}(fichier|document)/i.test(
+    String(text || ''),
+  )
+}
+
+/** Retire les faux « 📎 fichier envoyé » d'une réponse sans fichier. */
+export const stripFakeFiles = (text) =>
+  String(text || '')
+    .replace(/\[?[ \t]*📎[^\n\]]*\]?/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()

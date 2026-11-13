@@ -15,7 +15,6 @@ import { jidToNumber } from '../utils/phone.js'
 import { TTLCache } from '../utils/ttlCache.js'
 import { createCommands } from './commands.js'
 import { splitReply } from '../ai/engine.js'
-import { fileMemo } from '../ai/files.js'
 import { fitImage } from '../media/image.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -401,8 +400,7 @@ export class Bot {
       // .aai : l'IA cite ton message pour montrer qu'elle te répond à toi
       const quoted = mode === 'aai' ? ctx.msg : ctx.isGroup ? this.lastIncoming.get(chat) : undefined
       await this.sendAll(chat, { text, files }, quoted ? { quoted } : {})
-      const memo = [res.text, ...files.map((f) => fileMemo(f.name))].filter(Boolean).join('\n')
-      this.memory.addAfter(chat, { r: 'bot', mode, text: memo }, last.ts)
+      this.memory.addAfter(chat, { r: 'bot', mode, text: res.text, files }, last.ts)
     } catch (err) {
       await this.notifyError(err, ctx)
     } finally {
