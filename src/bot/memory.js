@@ -43,8 +43,19 @@ export class Memory {
     const item = { r: entry.r, t: String(entry.text).slice(0, MAX_TEXT), ts }
     if (entry.name) item.n = String(entry.name).slice(0, 60)
     if (entry.mode) item.m = String(entry.mode)
+    if (entry.image) item.i = String(entry.image) // image pas encore regardée par l'IA (id du message)
     list.splice(index, 0, item)
     this.kv.set(this.#key(chat), list.slice(-this.#limit()))
+  }
+
+  /** Remplace « [image] » par sa description une fois l'image regardée. */
+  setImageText(chat, imageId, text) {
+    const list = this.get(chat)
+    const index = list.findIndex((e) => e.i === imageId)
+    if (index === -1) return
+    const item = { ...list[index], t: String(text).slice(0, MAX_TEXT) }
+    delete item.i
+    this.kv.set(this.#key(chat), [...list.slice(0, index), item, ...list.slice(index + 1)])
   }
 
   last(chat) {

@@ -8,14 +8,20 @@ import {
   isPnJid,
   normalizeJid,
   targetsMe,
+  unwrapMessage,
 } from './message.js'
 import { Memory } from './memory.js'
 import { jidToNumber } from '../utils/phone.js'
+import { TTLCache } from '../utils/ttlCache.js'
 import { createCommands } from './commands.js'
+import { splitReply } from '../ai/engine.js'
+import { fileMemo } from '../ai/files.js'
+import { fitImage } from '../media/image.js'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const FRESH_MS = 10 * 60_000 // on ne répond pas aux vieux messages reçus pendant une coupure
 const PENDING_MS = 5 * 60_000
+const IMAGES_PER_REPLY = 3 // images regardées au plus avant une réponse
 
 function timestampMs(t) {
   if (t == null) return Date.now()
@@ -42,6 +48,7 @@ export class Bot {
     this.lastIncoming = new Map() // dernier message reçu (pour le citer en groupe)
     this.pending = new Map() // réponses attendues par le menu
     this.errorNotified = new Map()
+    this.images = new TTLCache({ ttlMs: 30 * 60_000, max: 200 }) // images reçues, regardées seulement si l'IA répond
     this.startedAt = Date.now()
     this.media = media || null // .song / .video (créé au premier usage s'il n'est pas fourni)
     this.commands = createCommands(this)
@@ -151,13 +158,31 @@ export class Bot {
     return this.settings.get('discreet') && !ctx.self && self ? self : ctx.chat
   }
 
-  async reply(ctx, text, { here = false } = {}) {
+  async reply(ctx, text, { here = false, files = [] } = {}) {
     const target = here ? ctx.chat : this.replyChat(ctx)
     const redirected = target !== ctx.chat
     const body = redirected ? `📍 _${this.label(ctx.chat)}_\n${text}` : text
     const discreet = this.settings.get('discreet') && !ctx.self
     const options = !redirected && !discreet && ctx.msg ? { quoted: ctx.msg } : {}
-    return this.wa.send(target, { text: body }, options).catch((err) => this.log.warn({ err: err?.message }, 'Envoi impossible'))
+    return this.sendAll(target, { text: body, files }, options).catch((err) => this.log.warn({ err: err?.message }, 'Envoi impossible'))
+  }
+
+  /** Texte (en plusieurs messages s'il est très long) puis fichiers ; seul le premier message cite. Renvoie le premier envoyé. */
+  async sendAll(chat, { text = '', files = [] }, options = {}) {
+    let opts = options
+    let first
+    for (const part of splitReply(text)) {
+      const sent = await this.wa.send(chat, { text: part }, opts)
+      first ??= sent
+      opts = {}
+    }
+    for (const f of files || []) {
+      const caption = f.truncated ? `⚠️ Fichier peut-être incomplet : la réponse a atteint la limite de longueur (${this.prefix}tokens).` : undefined
+      const sent = await this.wa.send(chat, { document: f.content, mimetype: f.mimetype, fileName: f.name, ...(caption ? { caption } : {}) }, opts)
+      first ??= sent
+      opts = {}
+    }
+    return first
   }
 
   // ---------- réception ----------
@@ -234,12 +259,13 @@ export class Bot {
     }
     const modes = this.activeModes(ctx.ids)
     if (!modes.length) return
-    this.memory.add(chat, { r: 'me', text: describe(ctx.content) })
+    const image = this.rememberImage(ctx)
+    this.memory.add(chat, { r: 'me', text: describe(ctx.content), image })
     // Dans ta discussion perso (« Moi ») avec .ai actif : tu discutes en privé avec ton IA
-    if (ctx.self && modes.includes('ai') && text && ctx.fresh) return this.schedule(ctx, 'ai', 0)
+    if (ctx.self && modes.includes('ai') && (text || image) && ctx.fresh) return this.schedule(ctx, 'ai', 0)
     this.cancel(chat) // tu as répondu toi-même : on annule la réponse automatique prévue
     // .aai : l'IA te répond aussi à toi, dans cette discussion (privée ou groupe)
-    if (!ctx.self && text && ctx.fresh && this.canReply(ctx.ids, 'aai')) this.schedule(ctx, 'aai')
+    if (!ctx.self && (text || image) && ctx.fresh && this.canReply(ctx.ids, 'aai')) this.schedule(ctx, 'aai')
   }
 
   /** Message reçu d'un contact ou d'un groupe. */
@@ -263,9 +289,10 @@ export class Bot {
     const sender = isGroup ? canonicalChat(key.participant, key.participantAlt) : chat
     const name = msg.pushName || (sender ? jidToNumber(sender) : 'Contact')
     if (!isGroup && msg.pushName) this.setLabel(chat, msg.pushName)
-    this.memory.add(chat, { r: 'them', name, text: describe(content) })
+    const image = this.rememberImage(ctx)
+    this.memory.add(chat, { r: 'them', name, text: describe(content), image })
     this.lastIncoming.set(chat, msg)
-    if (!content.text || !ctx.fresh) return // média sans texte : gardé en mémoire, pas de réponse
+    if ((!content.text && !image) || !ctx.fresh) return // autre média sans texte : gardé en mémoire, pas de réponse
     if (
       isGroup &&
       this.settings.get('groupMode') === 'mention' &&
@@ -274,6 +301,39 @@ export class Bot {
       return
     }
     this.schedule(ctx, mode)
+  }
+
+  // ---------- images ----------
+
+  /** Garde une image reçue pour que l'IA la regarde au moment de répondre. -> id du message, ou null. */
+  rememberImage(ctx) {
+    if (ctx.content?.type !== 'imageMessage' || !ctx.key?.id || !this.settings.get('vision')) return null
+    this.images.set(ctx.key.id, { msg: ctx.msg, caption: ctx.content.text || '' })
+    return ctx.key.id
+  }
+
+  /** Regarde les images récentes pas encore vues (une tentative chacune) et remplace « [image] » par leur description. */
+  async seeImages(ctx, history) {
+    const todo = history.filter((e) => e.i && this.images.has(e.i)).slice(-IMAGES_PER_REPLY)
+    if (!todo.length || !this.settings.get('vision')) return history
+    const ffmpeg = await Promise.resolve(this.media?.ffmpeg?.()).catch(() => null)
+    const seen = new Map()
+    for (const e of todo) {
+      const { msg, caption } = this.images.get(e.i)
+      this.images.delete(e.i)
+      try {
+        const raw = await this.wa.downloadMedia(msg)
+        const { image, mimetype } = await fitImage(raw, unwrapMessage(msg.message)?.imageMessage?.mimetype, ffmpeg)
+        const { text } = await this.ai.describeImage({ image, mimetype, caption })
+        if (!text) continue
+        const t = `[image : ${text}]${caption ? ` ${caption}` : ''}`
+        this.memory.setImageText(ctx.chat, e.i, t)
+        seen.set(e.i, t)
+      } catch (err) {
+        await this.notifyError(err, ctx, 'Image non analysée')
+      }
+    }
+    return history.map((e) => (seen.has(e.i) ? { ...e, t: seen.get(e.i) } : e))
   }
 
   // ---------- réponses de l'IA ----------
@@ -320,7 +380,7 @@ export class Bot {
       return
     }
     if (!this.wa.connected || !this.canReply(ctx.ids, mode)) return
-    const history = this.memory.get(chat)
+    let history = this.memory.get(chat)
     const last = history[history.length - 1]
     // On répond au dernier message : celui de l'interlocuteur, ou le tien (discussion « Moi » ou .aai)
     const toOwner = ctx.self || mode === 'aai'
@@ -328,18 +388,21 @@ export class Bot {
     this.busy.add(chat)
     try {
       await this.wa.presence(chat, 'composing')
+      history = await this.seeImages(ctx, history)
       const info = await this.chatInfo(ctx)
       const res = await this.ai.reply({ mode, history, chat: info, ownerName: this.ownerName() })
       const newer = this.memory.get(chat).filter((e) => e.ts > last.ts)
       if (!ctx.self && newer.some((e) => e.r === 'me')) return // tu as écrit entre-temps
       if (!this.canReply(ctx.ids, mode)) return // mode désactivé entre-temps
       let text = res.text
+      const files = res.files || []
       if (mode === 'meai') await sleep(Math.min(4000, 500 + text.length * 25)) // temps de frappe réaliste
-      if (mode !== 'meai' && this.settings.get('signature')) text += `\n\n_— ${this.settings.get('botName')} 🤖_`
+      if (text && mode !== 'meai' && this.settings.get('signature')) text += `\n\n_— ${this.settings.get('botName')} 🤖_`
       // .aai : l'IA cite ton message pour montrer qu'elle te répond à toi
       const quoted = mode === 'aai' ? ctx.msg : ctx.isGroup ? this.lastIncoming.get(chat) : undefined
-      await this.wa.send(chat, { text }, quoted ? { quoted } : {})
-      this.memory.addAfter(chat, { r: 'bot', mode, text: res.text }, last.ts)
+      await this.sendAll(chat, { text, files }, quoted ? { quoted } : {})
+      const memo = [res.text, ...files.map((f) => fileMemo(f.name))].filter(Boolean).join('\n')
+      this.memory.addAfter(chat, { r: 'bot', mode, text: memo }, last.ts)
     } catch (err) {
       await this.notifyError(err, ctx)
     } finally {
@@ -354,14 +417,14 @@ export class Bot {
   }
 
   /** Les erreurs sont envoyées dans TA discussion perso, jamais à ton interlocuteur. */
-  async notifyError(err, ctx) {
+  async notifyError(err, ctx, title = 'Réponse IA impossible') {
     const message = err?.message || String(err)
-    this.log.warn({ err: message }, 'Réponse IA impossible')
+    this.log.warn({ err: message }, title)
     const key = message.slice(0, 80)
     if (Date.now() - (this.errorNotified.get(key) || 0) < 10 * 60_000) return
     this.errorNotified.set(key, Date.now())
     const self = this.wa.selfJid()
     if (!self) return
-    await this.wa.send(self, { text: `⚠️ *Réponse IA impossible* (${this.label(ctx.chat)})\n${message}` }).catch(() => {})
+    await this.wa.send(self, { text: `⚠️ *${title}* (${this.label(ctx.chat)})\n${message}` }).catch(() => {})
   }
 }

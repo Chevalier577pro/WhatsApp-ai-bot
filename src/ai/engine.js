@@ -4,8 +4,18 @@
  * mode 'meai' -> l'IA répond à ta place, avec ton style
  * mode 'aai'  -> l'assistant te répond à TOI dans une discussion avec quelqu'un d'autre (.aai)
  */
+import { extractFiles } from './files.js'
 
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+export const MAX_MESSAGE = 4000 // au-delà, la réponse part en plusieurs messages WhatsApp
+// Si le modèle de vision choisi est indisponible ou refuse l'image, on essaie celui-ci
+const VISION_FALLBACKS = ['meta/llama-3.2-90b-vision-instruct']
+
+const MEDIA_RULE =
+  "Les images que tu as pu regarder apparaissent sous la forme [image : description] : réagis-y naturellement, comme si tu voyais l'image (sans parler de « description »). Les autres médias apparaissent entre crochets (ex : [image], [note vocale]) : si on attend ta réaction, dis simplement que tu ne peux pas les voir ou les écouter pour l'instant."
+const FILES_RULE =
+  "Tu peux envoyer des fichiers (.html, .txt, .md, .csv, .json, code…). Quand on te demande un fichier, ou qu'un long contenu (page web, code complet, document) est plus pratique en pièce jointe, écris son contenu complet entre <file name=\"nom.ext\"> et </file> : il sera envoyé comme document WhatsApp. Choisis un nom et une extension adaptés, mets uniquement le contenu du fichier entre les balises (il peut être aussi long que nécessaire) et ajoute une courte phrase en dehors. « [📎 fichier envoyé : nom] » dans l'historique signale un fichier que tu as déjà envoyé."
 
 function formatDate(timeZone, now = new Date()) {
   try {
@@ -63,9 +73,9 @@ export function buildSystemPrompt({ mode, settings, chat, ownerName, timeZone, n
     'Style WhatsApp : réponses courtes et naturelles (1 à 4 phrases en général, plus long seulement si on te demande des détails). Pas de titres ni de tableaux. Mise en forme WhatsApp uniquement : *gras*, _italique_, ~barré~, listes avec « - ».',
   )
   L.push('Réponds dans la langue de ton interlocuteur.')
-  L.push(
-    "Les médias que tu ne peux ni voir ni écouter apparaissent entre crochets (ex : [image], [note vocale]). Si on attend ta réaction à un média, dis simplement que tu ne peux pas le voir ou l'écouter pour l'instant.",
-  )
+  L.push(MEDIA_RULE)
+  // .meai parle à ta place : pas de fichiers envoyés en ton nom
+  if (mode !== 'meai') L.push(FILES_RULE)
   if (chat?.isGroup) L.push("Dans un groupe, chaque message commence par le nom de son auteur entre crochets. Ne mets pas de nom devant tes propres réponses.")
   else if (tagged) L.push("Les messages des autres participants commencent par le nom de leur auteur entre crochets. Ne mets pas de nom devant tes propres réponses.")
   if (settings.customPrompt) L.push(`Consignes supplémentaires de ${owner} : ${settings.customPrompt}`)
@@ -118,8 +128,30 @@ export function cleanReply(text, names = []) {
     .replace(/\*\*(.+?)\*\*/g, '*$1*')
     .replace(/__(.+?)__/g, '_$1_')
     .replace(/^#{1,6}\s+(.+)$/gm, '*$1*')
-  if (t.length > 4000) t = `${t.slice(0, 3990)}…`
   return t.trim()
+}
+
+/** Découpe un long texte en messages WhatsApp (de préférence entre paragraphes, puis lignes, puis mots). */
+export function splitReply(text, max = MAX_MESSAGE) {
+  let rest = String(text || '').trim()
+  const parts = []
+  while (rest.length > max) {
+    const slice = rest.slice(0, max)
+    let cut = slice.lastIndexOf('\n\n')
+    if (cut < max / 2) cut = slice.lastIndexOf('\n')
+    if (cut < max / 2) cut = slice.lastIndexOf(' ')
+    if (cut < max / 2) cut = max
+    parts.push(rest.slice(0, cut).trimEnd())
+    rest = rest.slice(cut).trimStart()
+  }
+  if (rest) parts.push(rest)
+  return parts
+}
+
+/** Texte de la réponse sans les fichiers, nettoyé, + les fichiers à envoyer. */
+function finish(res, names) {
+  const { text, files } = extractFiles(res.text)
+  return { ...res, text: cleanReply(text, names), files }
 }
 
 export class AIEngine {
@@ -151,7 +183,7 @@ export class AIEngine {
       maxTokens: s.maxTokens,
       reasoning: s.reasoning,
     })
-    return { ...res, text: cleanReply(res.text, [s.botName, ownerName]) }
+    return finish(res, [s.botName, ownerName])
   }
 
   /** Question directe à l'IA (commande .ask / .test). */
@@ -163,6 +195,7 @@ export class AIEngine {
       `Nous sommes le ${formatDate(this.timeZone)} (fuseau ${this.timeZone}).`,
       'Réponds de façon claire et concise, avec la mise en forme WhatsApp (*gras*, _italique_, listes avec « - »).',
       'Réponds dans la langue de la question.',
+      FILES_RULE,
       s.customPrompt ? `Consignes supplémentaires : ${s.customPrompt}` : '',
     ]
       .filter(Boolean)
@@ -183,7 +216,33 @@ export class AIEngine {
       maxTokens: s.maxTokens,
       reasoning: s.reasoning,
     })
-    return { ...res, text: cleanReply(res.text, [s.botName]) }
+    return finish(res, [s.botName])
+  }
+
+  /** L'IA « regarde » une image : le modèle de vision la décrit, la description rejoint la mémoire. */
+  async describeImage({ image, mimetype = 'image/jpeg', caption = '' }) {
+    const s = this.settings.all()
+    const prompt = [
+      "Décris cette image en français pour quelqu'un qui ne peut pas la voir : sujet principal, personnes (sans chercher à les identifier), objets, lieu, couleurs, ambiance.",
+      "Recopie mot pour mot tout texte visible. Pour une capture d'écran, un document, un exercice ou un graphique, retranscris son contenu utile.",
+      'Sois factuel et précis, sans introduction, en 10 phrases maximum.',
+      caption ? `Message envoyé avec l'image : « ${String(caption).slice(0, 500)} ». Donne en priorité les détails utiles pour y répondre.` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+    const url = `data:${mimetype};base64,${Buffer.from(image).toString('base64')}`
+    const messages = [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url } }] }]
+    let lastErr
+    for (const model of [...new Set([s.visionModel, ...VISION_FALLBACKS].filter(Boolean))]) {
+      try {
+        const res = await this.client.chat({ model, messages, temperature: 0.2, maxTokens: 800, reasoning: false })
+        return { text: res.text.trim().slice(0, 1500), model: res.model }
+      } catch (err) {
+        lastErr = err
+        if (![400, 404, 422].includes(err?.status)) throw err
+      }
+    }
+    throw lastErr
   }
 
   /** Test rapide : le modèle répond-il ? (+ temps de réponse) */

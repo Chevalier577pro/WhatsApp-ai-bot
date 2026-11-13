@@ -10,6 +10,7 @@ import {
   isJidBroadcast,
   isJidNewsletter,
   newMessageId,
+  downloadMediaMessage,
 } from './baileys.js'
 import { useKVAuthState } from '../storage/authState.js'
 import { encodeSession, decodeSession, hasValidSession, rememberSession, revokeSessions } from '../session.js'
@@ -473,6 +474,14 @@ export class WhatsAppManager extends EventEmitter {
 
   isBotMessage(id) {
     return !!id && this.sentMessages.get(id) !== undefined
+  }
+
+  /** Contenu (Buffer) d'un message média reçu, ex : une image à montrer à l'IA. */
+  async downloadMedia(msg) {
+    const sock = this.sock
+    if (!sock) throw new Error('WhatsApp non connecté')
+    if (typeof downloadMediaMessage !== 'function') throw new Error('téléchargement des médias indisponible (version de Baileys)')
+    return downloadMediaMessage(msg, 'buffer', {}, { logger: baileysLogger, reuploadRequest: (m) => sock.updateMediaMessage(m) })
   }
 
   async presence(jid, type) {

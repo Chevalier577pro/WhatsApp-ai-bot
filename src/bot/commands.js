@@ -20,6 +20,9 @@ export function formatDuration(ms) {
   return [d && `${d} j`, h && `${h} h`, `${m} min`].filter(Boolean).join(' ')
 }
 
+/** maxTokens = 0 : illimité. */
+export const tokensText = (v) => (Number(v) > 0 ? `${v} tokens` : 'illimitée ♾️')
+
 /**
  * Commandes du propriétaire (toi uniquement : seuls TES messages sont lus comme des commandes).
  * Chaque commande reçoit { t, arg, say, sayHere, menuChat, pending } :
@@ -250,20 +253,26 @@ export function createCommands(bot) {
 
   // ---------- réglages numériques ----------
 
-  function numberSetting(key, { cmd, emoji, label, min, max, unit = '', float = false, hint = '' }) {
+  function numberSetting(key, { cmd, emoji, label, min, max, unit = '', float = false, hint = '', show = (v) => `${v}${unit}`, special = null }) {
     return async ({ arg, say, menuChat, pending }) => {
       const a = String(arg || '').trim().replace(',', '.')
+      const alt = special ? ` ou *${P}${cmd} ${special.word}*` : ''
       if (!a) {
-        return say(`${emoji} ${label} : *${settings.get(key)}${unit}*${hint ? `\n${hint}` : ''}\n👉 *${P}${cmd} <${min}-${max}>* pour changer.`)
+        return say(`${emoji} ${label} : *${show(settings.get(key))}*${hint ? `\n${hint}` : ''}\n👉 *${P}${cmd} <${min}-${max}>*${alt} pour changer.`)
+      }
+      if (special?.match.test(a)) {
+        settings.set(key, special.value)
+        return say(`${emoji} ${label} : *${show(special.value)}* ✅${special.note ? `\n${special.note}` : ''}`)
       }
       const valid = float ? /^\d+(\.\d+)?$/.test(a) : /^\d+$/.test(a)
       const n = float ? Number(a) : Number.parseInt(a, 10)
       if (!valid || !Number.isFinite(n) || n < min || n > max) {
         if (pending) bot.setPending(menuChat, { ...pending })
-        return say(`❌ Valeur invalide : choisis un nombre entre ${min} et ${max}.${pending ? ' Réessaie (ou *annuler*).' : ''}`)
+        const or = special ? ` (ou « ${special.word} »)` : ''
+        return say(`❌ Valeur invalide : choisis un nombre entre ${min} et ${max}${or}.${pending ? ' Réessaie (ou *annuler*).' : ''}`)
       }
       settings.set(key, float ? Math.round(n * 100) / 100 : n)
-      return say(`${emoji} ${label} : *${settings.get(key)}${unit}* ✅`)
+      return say(`${emoji} ${label} : *${show(settings.get(key))}* ✅`)
     }
   }
 
@@ -282,8 +291,14 @@ export function createCommands(bot) {
     label: 'Longueur max des réponses',
     min: 64,
     max: 8192,
-    unit: ' tokens',
+    show: tokensText,
     hint: '1 token ≈ 0,75 mot.',
+    special: {
+      word: 'illimite',
+      match: /^(0|illimit[a-zé]*|infini[a-z]*|unlimited|sans ?limites?|aucune|max|∞)$/i,
+      value: 0,
+      note: "Plus de limite imposée par le bot : le modèle écrit jusqu'à sa propre limite. Les longues réponses arrivent en plusieurs messages.",
+    },
   })
   const memorySize = numberSetting('memory', {
     cmd: 'memoire',
@@ -368,7 +383,7 @@ export function createCommands(bot) {
     await say(`🧪 Test de *${settings.get('model')}*…`)
     const t0 = Date.now()
     const r = q ? await ai.ask(q, { ownerName: bot.ownerName() }) : await ai.test({ ownerName: bot.ownerName() })
-    return say(`✅ Réponse en ${((Date.now() - t0) / 1000).toFixed(1)} s :\n\n${r.text}`)
+    return say(`✅ Réponse en ${((Date.now() - t0) / 1000).toFixed(1)} s :\n\n${r.text}`, r.files)
   }
 
   async function ask({ t, arg, say, sayHere }) {
@@ -377,10 +392,37 @@ export function createCommands(bot) {
     await wa.presence(t.chat, 'composing')
     try {
       const r = await ai.ask(q, { ownerName: bot.ownerName() })
-      return await (sayHere || say)(r.text)
+      return await (sayHere || say)(r.text, r.files)
     } finally {
       await wa.presence(t.chat, 'paused')
     }
+  }
+
+  /** .vision : l'IA regarde les images reçues (description par un modèle de vision). */
+  async function vision({ arg, say }) {
+    const a = String(arg || '').trim()
+    const show = () => `👁️ Vision (images) : *${settings.get('vision') ? 'activée ✅' : 'désactivée ⛔'}*\nModèle de vision : *${settings.get('visionModel')}*`
+    if (!a) {
+      return say(`${show()}\n👉 *${P}vision on/off* • *${P}vision <modèle>* pour changer (il doit accepter les images) • *${P}vision reset*`)
+    }
+    const sw = parseSwitch(a)
+    if (sw !== null) {
+      settings.set('vision', sw)
+      return say(`${show()}\n${sw ? "Je regarde les images reçues avant de répondre." : 'Les images restent de simples « [image] » pour l’IA.'}`)
+    }
+    if (a.toLowerCase() === 'reset') {
+      settings.update({ visionModel: DEFAULT_SETTINGS().visionModel, vision: true })
+      return say(show())
+    }
+    let id = a
+    if (!a.includes('/')) {
+      const found = (await ai.client.listModels()).filter((m) => m.toLowerCase().includes(a.toLowerCase()))
+      if (!found.length) return say(`🔎 Aucun modèle ne contient « ${a} ».`)
+      if (found.length > 1) return say(`🔎 Plusieurs modèles correspondent :\n${found.slice(0, 15).map((m) => `- ${m}`).join('\n')}\n👉 *${P}vision <nom complet>*`)
+      id = found[0]
+    }
+    settings.update({ visionModel: id, vision: true })
+    return say(show())
   }
 
   async function session({ t, say }) {
@@ -422,10 +464,11 @@ export function createCommands(bot) {
         `- Nom du bot : ${s.botName}`,
         `- Ton prénom : ${s.ownerName || `_(profil WhatsApp : ${wa.me?.name || '?'})_`}`,
         `- Modèle : ${s.model}`,
+        `- Vision (images) : ${s.vision ? s.visionModel : 'désactivée'}`,
         `- Personnalité : ${s.personality}`,
         `- Consignes perso : ${s.customPrompt ? s.customPrompt.slice(0, 200) : '_aucune_'}`,
         `- Température : ${s.temperature}`,
-        `- Longueur max : ${s.maxTokens} tokens`,
+        `- Longueur max : ${tokensText(s.maxTokens)}`,
         `- Mémoire : ${s.memory} messages`,
         `- Délai : ${s.replyDelay} s`,
         `- Groupes : ${s.groupMode === 'all' ? 'répond à tout' : 'seulement si mentionné'}`,
@@ -467,6 +510,7 @@ export function createCommands(bot) {
         `${P}model <numéro ou nom> — choisir le modèle`,
         `${P}test [question] — tester l'IA et son temps de réponse`,
         `${P}reflexion on/off — l'IA réfléchit avant de répondre (plus lent)`,
+        `${P}vision [on/off ou modèle] — l'IA regarde les images reçues`,
         '',
         '*⚙️ Réglages*',
         `${P}owner <prénom> — ton prénom, utilisé par l'IA`,
@@ -474,7 +518,7 @@ export function createCommands(bot) {
         `${P}perso <texte> — personnalité de l'IA`,
         `${P}prompt <texte> — consignes perso (qui tu es, ta façon d'écrire…)`,
         `${P}temp <0-2> — créativité des réponses`,
-        `${P}tokens <64-8192> — longueur max des réponses`,
+        `${P}tokens <64-8192 ou illimite> — longueur max des réponses`,
         `${P}memoire <2-100> — nombre de messages retenus par discussion`,
         `${P}delai <0-120> — secondes d'attente avant de répondre`,
         `${P}groupes tout/mention — en groupe : répondre à tout, ou seulement quand on te mentionne`,
@@ -520,7 +564,7 @@ export function createCommands(bot) {
     [18, '🔑', 'Statut & SESSION_ID'],
     [0, '❌', 'Fermer le menu'],
   ]
-  const ZERO_IS_VALUE = new Set(['temp', 'delai']) // étapes où « 0 » est une vraie valeur
+  const ZERO_IS_VALUE = new Set(['temp', 'delai', 'tokens']) // étapes où « 0 » est une vraie valeur (tokens : 0 = illimité)
   const CANCEL = /^(annuler|cancel|x)$/i
 
   function menuText(t) {
@@ -581,7 +625,7 @@ export function createCommands(bot) {
       case 10:
         return askFor('temp', `🌡️ Température actuelle : *${settings.get('temperature')}*\n\nEnvoie un nombre entre 0 et 2 (0 = précis • 0.7 = équilibré • 1.2 = très créatif).`)
       case 11:
-        return askFor('tokens', `📏 Longueur max actuelle : *${settings.get('maxTokens')} tokens*\n\nEnvoie un nombre entre 64 et 8192 (1 token ≈ 0,75 mot).`)
+        return askFor('tokens', `📏 Longueur max actuelle : *${tokensText(settings.get('maxTokens'))}*\n\nEnvoie un nombre entre 64 et 8192 (1 token ≈ 0,75 mot), ou *illimite* (ou *0*) pour ne plus limiter.`)
       case 12:
         return askFor('memoire', `🧩 Mémoire actuelle : *${settings.get('memory')} messages*\n\nEnvoie un nombre entre 2 et 100.`)
       case 13:
@@ -750,6 +794,8 @@ export function createCommands(bot) {
     raisonnement: reasoning,
     reasoning,
     think: reasoning,
+    vision,
+    images: vision,
     reset: resetMemory,
     oublie: resetMemory,
     test,
@@ -786,8 +832,8 @@ export function createCommands(bot) {
     const a = {
       t: { chat: ctx.chat, ids: ctx.ids, isGroup: ctx.isGroup, self: ctx.self },
       arg,
-      say: (text) => bot.reply(ctx, text),
-      sayHere: (text) => bot.reply(ctx, text, { here: true }),
+      say: (text, files) => bot.reply(ctx, text, { files }),
+      sayHere: (text, files) => bot.reply(ctx, text, { here: true, files }),
       sayRaw: (text) => wa.send(menuChat, { text }).catch(() => {}),
       menuChat,
       pending: null,

@@ -33,6 +33,11 @@ import {
   safeFileName,
 } from '../src/media/youtube.js'
 import { WA_INLINE_MAX_BYTES, buildMediaMessage, parseMediaChoice, previewText } from '../src/bot/media.js'
+import { extractFiles, cleanFileName, mimeFor } from '../src/ai/files.js'
+import { splitReply } from '../src/ai/engine.js'
+import { fitImage, INLINE_MAX_B64 } from '../src/media/image.js'
+import { findFfmpeg, runProcess } from '../src/media/tools.js'
+import { AIError } from '../src/ai/nvidia.js'
 
 const silent = { info() {}, warn() {}, error() {}, debug() {}, trace() {}, fatal() {}, child: () => silent }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -269,6 +274,11 @@ class FakeWA extends EventEmitter {
 
   async presence() {}
 
+  async downloadMedia() {
+    this.downloads = (this.downloads || 0) + 1
+    return Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4])
+  }
+
   async deleteForEveryone(jid, key) {
     this.deleted.push({ jid, key })
   }
@@ -469,6 +479,199 @@ await test("Bot : .aai (l'IA te répond aussi) et .help sans menu", async () => 
   await up(incoming(self, '.aai', { fromMe: true }))
   assert.equal(settings.isActive('aai', [self]), false)
 
+  await kv.close()
+})
+
+// ---------- fichiers, images et tokens illimités ----------
+
+await test("Fichiers de l'IA : extraction, noms sûrs, blocs coupés", () => {
+  const raw = 'Voici ta page :\n```html\n<file name="../site/index.html">\n```html\n<h1>**Salut**</h1>\n# titre\n```\n</file>\n```\nEt les notes <fichier nom="notes">\nligne 1'
+  const { text, files } = extractFiles(raw)
+  assert.equal(text, 'Voici ta page :\n\nEt les notes')
+  assert.equal(files.length, 2)
+  assert.equal(files[0].name, 'index.html')
+  assert.equal(files[0].mimetype, 'text/html')
+  assert.equal(files[0].content.toString(), '<h1>**Salut**</h1>\n# titre', 'le contenu du fichier reste intact')
+  assert.equal(files[0].truncated, false)
+  assert.equal(files[1].name, 'notes.txt')
+  assert.equal(files[1].content.toString(), 'ligne 1')
+  assert.equal(files[1].truncated, true, 'bloc non refermé = fichier peut-être incomplet')
+  assert.deepEqual(extractFiles('Pas de fichier ici').files, [])
+  assert.equal(cleanFileName('a:b?.CSV'), 'ab.CSV')
+  assert.equal(mimeFor('data.csv'), 'text/csv')
+  assert.equal(mimeFor('inconnu.xyz'), 'text/plain')
+})
+
+await test('Longues réponses : découpées en plusieurs messages, sans rien perdre', () => {
+  const para = 'mot '.repeat(400).trim()
+  const long = Array.from({ length: 6 }, () => para).join('\n\n')
+  const parts = splitReply(long)
+  assert.ok(parts.length > 1)
+  assert.ok(parts.every((p) => p.length <= 4000))
+  assert.equal(parts.join(' ').replace(/\s+/g, ' '), long.replace(/\s+/g, ' '))
+  assert.deepEqual(splitReply('court'), ['court'])
+  assert.deepEqual(splitReply(''), [])
+})
+
+await test('Client NVIDIA : tokens illimités = pas de max_tokens envoyé', async () => {
+  const bodies = []
+  const fetchImpl = async (url, opts = {}) => {
+    bodies.push(JSON.parse(opts.body))
+    const data = { choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] }
+    return new Response(JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } })
+  }
+  const client = new NvidiaClient({ apiKey: 'nvapi-test', baseUrl: 'https://exemple.invalid/v1', log: silent, fetchImpl })
+  await client.chat({ model: 'org/m', messages: [{ role: 'user', content: 'a' }], maxTokens: 512 })
+  await client.chat({ model: 'org/m', messages: [{ role: 'user', content: 'a' }], maxTokens: 0 })
+  assert.equal(bodies[0].max_tokens, 512)
+  assert.equal('max_tokens' in bodies[1], false)
+})
+
+await test('Moteur IA : fichiers dans la réponse et description des images', async () => {
+  const kv = await newKv('engine-files')
+  const settings = new Settings(kv)
+  const calls = []
+  let answer = '<file name="page.html">\n<b>**gras**</b>\n</file>\nVoilà **ta** page'
+  const client = {
+    configured: true,
+    chat: async (args) => {
+      calls.push(args)
+      if (args.model === settings.get('visionModel')) throw new AIError('Modèle introuvable', { status: 404 })
+      return { text: answer, model: args.model }
+    },
+  }
+  const engine = new AIEngine({ client, settings, timeZone: 'Europe/Paris' })
+  const history = [{ r: 'them', t: 'Fais-moi une page', ts: 1, n: 'Bob' }]
+  const res = await engine.reply({ mode: 'ai', history, chat: { isGroup: false, name: 'Bob' }, ownerName: 'Alex' })
+  assert.equal(res.text, 'Voilà *ta* page')
+  assert.equal(res.files[0].content.toString(), '<b>**gras**</b>')
+  assert.match(calls[0].messages[0].content, /<file name=/)
+  await engine.reply({ mode: 'meai', history, chat: { isGroup: false, name: 'Bob' }, ownerName: 'Alex' })
+  assert.doesNotMatch(calls[1].messages[0].content, /<file name=/, 'pas de fichiers envoyés à ta place')
+  assert.match(calls[1].messages[0].content, /\[image : description\]/)
+
+  answer = 'Un chat roux sur un canapé.'
+  const seen = await engine.describeImage({ image: Buffer.from('img'), mimetype: 'image/png', caption: "C'est quoi ?" })
+  assert.equal(seen.text, 'Un chat roux sur un canapé.')
+  const [first, second] = calls.slice(2)
+  assert.equal(first.model, settings.get('visionModel'))
+  assert.equal(second.model, 'meta/llama-3.2-90b-vision-instruct', 'modèle de secours si le premier est introuvable')
+  const parts = second.messages[0].content
+  assert.match(parts[0].text, /C'est quoi \?/)
+  assert.equal(parts[1].image_url.url, `data:image/png;base64,${Buffer.from('img').toString('base64')}`)
+  await kv.close()
+})
+
+await test('Images : réduites sous la limite NVIDIA (ffmpeg)', async () => {
+  const small = Buffer.from([0xff, 0xd8, 1, 2])
+  assert.equal((await fitImage(small, 'image/jpeg')).image, small)
+  const ffmpeg = await findFfmpeg()
+  if (!ffmpeg) return console.log('   (ffmpeg absent : réduction non testée)')
+  const big = await runProcess(
+    ffmpeg.path,
+    ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'nullsrc=s=2400x1800,geq=random(1)*255:128:128', '-frames:v', '1', '-q:v', '2', '-f', 'image2pipe', '-c:v', 'mjpeg', 'pipe:1'],
+    { timeoutMs: 60_000 },
+  )
+  assert.ok(big.stdoutBuffer.length * 4 / 3 > INLINE_MAX_B64, 'image de test assez lourde')
+  const out = await fitImage(big.stdoutBuffer, 'image/jpeg', ffmpeg)
+  assert.equal(out.mimetype, 'image/jpeg')
+  assert.ok(out.image.length < big.stdoutBuffer.length)
+  assert.ok(Math.ceil(out.image.length / 3) * 4 <= INLINE_MAX_B64, `${out.image.length} octets`)
+})
+
+await test("Bot : l'IA voit les images, envoie des fichiers, tokens illimités", async () => {
+  const kv = await newKv('bot-vision')
+  const settings = new Settings(kv)
+  settings.set('replyDelay', 0)
+  const wa = new FakeWA()
+  const file = { name: 'page.html', mimetype: 'text/html', content: Buffer.from('<h1>Salut</h1>'), truncated: false }
+  const ai = {
+    calls: [],
+    looked: [],
+    client: fakeAI.client,
+    async describeImage(args) {
+      this.looked.push(args)
+      return { text: 'Un chat roux dort sur un canapé bleu.' }
+    },
+    async reply(args) {
+      this.calls.push(args)
+      return { text: 'Voici ta page !', files: [file] }
+    },
+    async ask() {
+      return { text: '', files: [file] }
+    },
+    async test() {
+      return { text: 'ok', ms: 1 }
+    },
+  }
+  const bot = new Bot({ wa, kv, settings, ai, config: { prefix: '.', botName: 'Nova', ownerName: '' }, log: silent })
+  const friend = '33633333333@s.whatsapp.net'
+  const self = wa.me.id
+  const up = async (msg, wait = 60) => {
+    await bot.onUpsert({ messages: [msg], type: 'notify' })
+    await sleep(wait)
+  }
+  const photo = (remoteJid, caption = '', { fromMe = false } = {}) => ({
+    key: { remoteJid, fromMe, id: `IMG${++seq}` },
+    message: { imageMessage: { mimetype: 'image/jpeg', url: 'https://exemple.invalid/img', ...(caption ? { caption } : {}) } },
+    pushName: 'Bob',
+    messageTimestamp: Math.floor(Date.now() / 1000),
+  })
+  await up(incoming(friend, '.ai', { fromMe: true }))
+
+  // une photo sans légende : l'IA la regarde puis répond
+  let n = wa.sent.length
+  await up(photo(friend), 200)
+  assert.equal(ai.looked.length, 1)
+  assert.equal(ai.looked[0].mimetype, 'image/jpeg')
+  assert.ok(ai.calls.at(-1).history.some((e) => e.t === '[image : Un chat roux dort sur un canapé bleu.]'))
+  const out = wa.sent.slice(n).filter((s) => s.jid === friend)
+  assert.equal(out[0].text, 'Voici ta page !')
+  assert.equal(out[1].content.fileName, 'page.html')
+  assert.equal(out[1].content.mimetype, 'text/html')
+  assert.equal(out[1].content.document.toString(), '<h1>Salut</h1>')
+  const mem = bot.memory.get(friend)
+  assert.ok(!mem.some((e) => e.i), "l'image n'est regardée qu'une fois")
+  assert.match(mem.at(-1).t, /\[📎 fichier envoyé : page\.html\]/)
+
+  // message suivant : pas de nouveau téléchargement
+  await up(incoming(friend, 'Tu peux la modifier ?'), 200)
+  assert.equal(wa.downloads, 1)
+
+  // dans « Moi », une photo avec légende déclenche ton IA privée
+  await up(incoming(self, '.ai', { fromMe: true }))
+  n = ai.calls.length
+  await up(photo(self, 'Tu vois quoi ?', { fromMe: true }), 200)
+  assert.equal(ai.calls.length, n + 1)
+  assert.equal(ai.looked.at(-1).caption, 'Tu vois quoi ?')
+
+  // .vision off : l'image reste « [image] », pas de réponse à une photo seule
+  await up(incoming(self, '.vision off', { fromMe: true }))
+  assert.equal(settings.get('vision'), false)
+  n = ai.calls.length
+  await up(photo(friend), 200)
+  assert.equal(ai.calls.length, n)
+  assert.equal(wa.downloads, 2)
+
+  // .ask : un fichier seul est bien envoyé
+  n = wa.sent.length
+  await up(incoming(friend, '.ask fais un fichier', { fromMe: true }))
+  assert.ok(wa.sent.slice(n).some((s) => s.content?.fileName === 'page.html'))
+
+  // .tokens illimite / 0 / nombre / valeur invalide, et le menu
+  await up(incoming(self, '.tokens illimité', { fromMe: true }))
+  assert.equal(settings.get('maxTokens'), 0)
+  assert.match(wa.sent.at(-1).text, /illimitée/)
+  await up(incoming(self, '.tokens 2048', { fromMe: true }))
+  assert.equal(settings.get('maxTokens'), 2048)
+  await up(incoming(self, '.tokens 10', { fromMe: true }))
+  assert.equal(settings.get('maxTokens'), 2048)
+  await up(incoming(self, '.menu', { fromMe: true }))
+  await up(incoming(self, '11', { fromMe: true }))
+  await up(incoming(self, '0', { fromMe: true }))
+  assert.equal(settings.get('maxTokens'), 0, 'dans le menu, 0 = illimité')
+  await up(incoming(self, '.reglages', { fromMe: true }))
+  assert.match(wa.sent.at(-1).text, /Longueur max : illimitée/)
   await kv.close()
 })
 

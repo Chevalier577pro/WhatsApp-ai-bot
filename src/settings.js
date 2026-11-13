@@ -6,8 +6,10 @@ export const DEFAULT_SETTINGS = () => ({
   personality: 'amical, drôle, naturel et serviable',
   customPrompt: '',
   model: config.nvidiaModel,
+  visionModel: config.nvidiaVisionModel,
+  vision: true, // l'IA regarde les images reçues
   temperature: 0.7,
-  maxTokens: 1024,
+  maxTokens: 1024, // 0 = illimité (aucune limite envoyée au modèle)
   memory: 20,
   replyDelay: 2,
   groupMode: 'all', // 'all' = répond à tout | 'mention' = seulement si on te mentionne / te répond

@@ -21,6 +21,7 @@ export const fetchLatestBaileysVersion = lib.fetchLatestBaileysVersion
 export const makeCacheableSignalKeyStore = lib.makeCacheableSignalKeyStore
 export const generateMessageIDV2 = lib.generateMessageIDV2
 export const generateMessageID = lib.generateMessageID
+export const downloadMediaMessage = lib.downloadMediaMessage
 
 export const DisconnectReason = {
   connectionClosed: 428,

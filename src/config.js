@@ -48,6 +48,8 @@ export const config = Object.freeze({
   nvidiaApiKey: env('NVIDIA_API_KEY'),
   nvidiaBaseUrl: env('NVIDIA_BASE_URL', 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, ''),
   nvidiaModel: env('NVIDIA_MODEL', 'nvidia/nemotron-3-ultra-550b-a55b'),
+  // Modèle qui regarde les images reçues (doit accepter les images)
+  nvidiaVisionModel: env('NVIDIA_VISION_MODEL', 'nvidia/nemotron-3.5-super-vl-120b-a12b'),
 
   prefix: env('PREFIX', '.'),
   botName: env('BOT_NAME', 'Nova'),
