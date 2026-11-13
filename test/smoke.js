@@ -920,6 +920,51 @@ await test("Site : statut, mot de passe et appairage par code", async () => {
   }
 })
 
+await test('Site : catalogue des commandes, fichiers statiques et infos du tableau de bord', async () => {
+  const kv = await newKv('site-assets')
+  const settings = new Settings(kv)
+  const wa = new FakeWA()
+  const bot = new Bot({ wa, kv, settings, ai: fakeAI, config: { prefix: '.', botName: 'Nova', ownerName: '' }, log: silent })
+  const config = { adminPassword: '', botName: 'Nova', port: 0, prefix: '!', nvidiaApiKey: 'nvapi-test', nvidiaModel: 'org/modele' }
+  const server = createWebServer({ wa, config, log: silent, settings, commands: bot.commands })
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const base = `http://127.0.0.1:${server.address().port}`
+  try {
+    const cat = await (await fetch(base + '/api/commands')).json()
+    assert.equal(cat.prefix, '!')
+    assert.equal(cat.commands.length, bot.commands.HELP.length)
+    assert.deepEqual(cat.categories.map((c) => c.id), bot.commands.HELP_CATS.map(([id]) => id))
+    const help = cat.commands.find((c) => c.cmd === 'help')
+    assert.ok(help.aliases.includes('aide'), 'les autres noms sont listés')
+    assert.ok(cat.commands.every((c) => c.short && bot.commands.HELP_CATS.some(([id]) => id === c.cat)))
+
+    const st = await (await fetch(base + '/api/status')).json()
+    assert.equal(st.aiConfigured, true)
+    assert.equal(typeof st.uptime, 'number')
+    assert.ok(st.model)
+
+    for (const [file, type] of [['style.css', /text\/css/], ['app.js', /javascript/], ['scene.js', /javascript/], ['favicon.svg', /svg/]]) {
+      const res = await fetch(`${base}/assets/${file}`)
+      assert.equal(res.status, 200, file)
+      assert.match(res.headers.get('content-type'), type, file)
+      assert.ok((await res.text()).length > 50, file)
+    }
+    for (const bad of ['/assets/..%2Fserver.js', '/assets/%2e%2e%2fserver.js', '/assets/nope.js', '/assets/index.html', '/assets/']) {
+      assert.equal((await fetch(base + bad)).status, 404, bad)
+    }
+    const html = await (await fetch(base + '/')).text()
+    for (const ref of html.matchAll(/(?:src|href)="(\/assets\/[^"?]+)/g)) {
+      assert.equal((await fetch(base + ref[1])).status, 200, `${ref[1]} référencé par la page`)
+    }
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1])
+    assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), [], 'identifiants uniques dans la page')
+  } finally {
+    server.closeAllConnections?.()
+    server.close()
+    await kv.close()
+  }
+})
+
 // ───────────── .song / .video ─────────────
 
 await test('Musique/vidéo : liens YouTube, durées, noms de fichiers', () => {

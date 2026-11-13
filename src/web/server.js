@@ -6,6 +6,14 @@ import { fileURLToPath } from 'node:url'
 import { maskNumber } from '../utils/phone.js'
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public')
+const ASSETS_DIR = path.join(PUBLIC_DIR, 'assets')
+const ASSET_TYPES = {
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+}
 const TOKEN_TTL_MS = 10 * 60_000 // durée pendant laquelle la personne qui appaire peut voir le code / QR / SESSION_ID
 const PAIR_COOLDOWN_MS = 15_000
 const MAX_BODY = 64 * 1024
@@ -57,13 +65,57 @@ function send(res, status, body, headers = {}) {
   res.end(isText ? body : JSON.stringify(body))
 }
 
+/** Fichiers du dossier public/assets (un seul niveau, noms simples : pas de « .. » possible). */
+async function sendAsset(res, rawName, head) {
+  let name = ''
+  try {
+    name = decodeURIComponent(rawName)
+  } catch {}
+  const type = ASSET_TYPES[path.extname(name).toLowerCase()]
+  if (!type || !/^[a-z0-9][a-z0-9._-]*$/i.test(name)) return send(res, 404, { error: 'Page introuvable.' })
+  let body
+  try {
+    body = await readFile(path.join(ASSETS_DIR, name))
+  } catch {
+    return send(res, 404, { error: 'Page introuvable.' })
+  }
+  res.writeHead(200, {
+    'Content-Type': type,
+    'Content-Length': body.length,
+    'Cache-Control': 'public, max-age=300',
+    'X-Content-Type-Options': 'nosniff',
+    'Referrer-Policy': 'no-referrer',
+  })
+  res.end(head ? undefined : body)
+}
+
+/** Catalogue public des commandes (le même que .help), pour la page « Commandes » du site. */
+function buildCatalog(commands, prefix) {
+  const help = Array.isArray(commands?.HELP) ? commands.HELP : []
+  const table = commands?.COMMANDS || {}
+  return {
+    prefix,
+    categories: (commands?.HELP_CATS || []).map(([id, title]) => ({ id, title })),
+    commands: help.map((h) => ({
+      cmd: h.cmd,
+      cat: h.cat,
+      args: h.args || '',
+      short: h.short || '',
+      detail: h.detail || '',
+      examples: h.examples || [],
+      aliases: Object.keys(table).filter((k) => k !== h.cmd && table[h.cmd] && table[k] === table[h.cmd]),
+    })),
+  }
+}
+
 /**
  * Site d'appairage : code à 8 caractères, QR code, SESSION_ID, import, déconnexion.
  * - Avec ADMIN_PASSWORD : toutes les actions demandent le mot de passe.
  * - Sans ADMIN_PASSWORD : l'appairage n'est possible que tant que le bot n'est pas connecté.
  */
-export function createWebServer({ wa, config, log, settings }) {
+export function createWebServer({ wa, config, log, settings, commands }) {
   const hasPassword = Boolean(config.adminPassword)
+  const catalog = buildCatalog(commands, config.prefix || '.')
   let token = null // { value, expiresAt } remis à la personne qui vient de demander un code ou un QR
   let lastPairAt = 0
   const failures = new Map() // ip -> { count, until } (anti force brute)
@@ -140,6 +192,9 @@ export function createWebServer({ wa, config, log, settings }) {
       lastError: st.lastError,
       connectedAt: st.connectedAt,
       botName: settings?.get('botName') || config.botName,
+      model: settings?.get('model') || config.nvidiaModel || null,
+      aiConfigured: Boolean(config.nvidiaApiKey),
+      uptime: Math.round(process.uptime()),
       needsPassword: hasPassword,
       canPair: hasPassword || !st.connected,
       pairing: trusted && st.pairing ? { code: st.pairing.code, expiresAt: st.pairing.expiresAt } : null,
@@ -151,6 +206,9 @@ export function createWebServer({ wa, config, log, settings }) {
   async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://localhost')
     const route = `${req.method} ${url.pathname}`
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname.startsWith('/assets/')) {
+      return sendAsset(res, url.pathname.slice('/assets/'.length), req.method === 'HEAD')
+    }
     switch (route) {
       case 'GET /':
       case 'GET /index.html': {
@@ -165,6 +223,8 @@ export function createWebServer({ wa, config, log, settings }) {
         return res.end()
       case 'GET /api/status':
         return send(res, 200, statusFor(req, url))
+      case 'GET /api/commands':
+        return send(res, 200, catalog)
       case 'POST /api/login': {
         if (!hasPassword) return send(res, 200, { ok: true, noPassword: true })
         const ip = clientIp(req)
