@@ -11,6 +11,9 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 - 🪞 **`.meai`** : l'IA répond **à ta place**, avec ton style (et se tait si tu réponds toi-même).
 - 🙋 **`.aai`** : l'IA te répond **aussi à toi** dans une discussion ou un groupe où `.ai` ou `.meai` est actif.
 - 💬 **IA privée** : active `.ai` dans ta discussion « Moi » pour discuter avec ton IA.
+- 👁️ **L'IA voit les images** : une photo reçue (avec ou sans légende) est regardée par un modèle de vision NVIDIA avant la réponse (`.vision` pour régler).
+- 📎 **L'IA envoie des fichiers** : demande-lui une page `.html`, un `.txt`, un `.csv`, du code… elle l'envoie en pièce jointe (avec `.ai`, `.aai` et `.ask`, pas avec `.meai`).
+- ♾️ **Longueur illimitée** possible : `.tokens illimite` ; les longues réponses arrivent en plusieurs messages.
 - 📋 **Menu numéroté** (`.menu`, options 1 à 18 et 0) : tout se règle en répondant par un numéro.
 - 📖 **`.help`** : la liste de toutes les commandes avec leurs explications.
 - 🎵 **`.song`** et 🎬 **`.video`** : un titre (ou un lien) → miniature → choix **MP3 / audio WhatsApp** ou **MP4 / vidéo WhatsApp**. Accessibles **à tout le monde**, pas seulement à toi.
@@ -132,13 +135,14 @@ Pour le modèle : un **numéro** pour choisir, **+** pour la page suivante, ou u
 | `.owner <prénom>` | Ton prénom |
 | `.nom <nom>` | Nom de l'assistant |
 | `.temp <0 à 2>` | Créativité des réponses |
-| `.tokens <64 à 8192>` | Longueur max des réponses |
+| `.tokens <64 à 8192>` · `.tokens illimite` | Longueur max des réponses · aucune limite (le modèle s'arrête à sa propre limite) |
 | `.memoire <2 à 100>` | Nombre de messages mémorisés par discussion |
 | `.delai <0 à 120>` | Secondes d'attente avant de répondre |
 | `.groupes tout` · `.groupes mention` | En groupe : répondre à tout · seulement si on te mentionne |
 | `.discret on/off` | Mode discret |
 | `.signature on/off` | Signature « — Nova 🤖 » sous les réponses de l'assistant |
 | `.reflexion on/off` | Mode réflexion (modèles compatibles) |
+| `.vision on/off` · `.vision <modèle>` | L'IA regarde les images reçues · modèle de vision utilisé |
 | `.reglages` · `.reinit` | Voir · remettre par défaut les réglages |
 | `.song <titre ou lien>` | Miniature de la musique, puis **1** = MP3 (fichier) · **2** = audio WhatsApp |
 | `.video <titre ou lien>` | Miniature de la vidéo, puis **1** = MP4 (fichier) · **2** = vidéo WhatsApp |
@@ -196,6 +200,7 @@ Ces deux commandes sont **ouvertes à tout le monde** : tes contacts et les memb
 | `MONGODB_URI` | Facultatif : base MongoDB pour garder réglages et mémoire | — |
 | `MONGODB_DB` | Nom de la base MongoDB | `whatsapp_ai_bot` |
 | `NVIDIA_MODEL` | Modèle utilisé au départ | `nvidia/nemotron-3-ultra-550b-a55b` |
+| `NVIDIA_VISION_MODEL` | Modèle qui regarde les images (doit accepter les images) | `nvidia/nemotron-3.5-super-vl-120b-a12b` |
 | `NVIDIA_BASE_URL` | Adresse de l'API NVIDIA | `https://integrate.api.nvidia.com/v1` |
 | `OWNER_NAME` | Ton prénom | nom de ton profil WhatsApp |
 | `BOT_NAME` | Nom de l'assistant | `Nova` |

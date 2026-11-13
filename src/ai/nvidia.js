@@ -96,19 +96,24 @@ export class NvidiaClient {
     throw lastErr
   }
 
+  /** maxTokens <= 0 ou null : illimité (le modèle s'arrête à sa propre limite). */
   async chat({ model, messages, temperature = 0.7, maxTokens = 1024, reasoning = false }) {
-    const body = { model, messages, temperature, top_p: 0.95, max_tokens: maxTokens, stream: false }
+    const unlimited = !(Number(maxTokens) > 0)
+    const body = { model, messages, temperature, top_p: 0.95, stream: false }
+    if (!unlimited) body.max_tokens = Number(maxTokens)
+    // Sans limite, une longue réponse peut prendre plusieurs minutes
+    const timeoutMs = unlimited ? 300_000 : 90_000
     // Active/désactive le "mode réflexion" des modèles qui le proposent
     if (/nemotron|qwen3|deepseek-v3\.[1-9]|glm-4\.[5-9]/i.test(model)) {
       body.chat_template_kwargs = { enable_thinking: !!reasoning, thinking: !!reasoning }
     }
     let data
     try {
-      data = await this.#request('/chat/completions', { method: 'POST', body })
+      data = await this.#request('/chat/completions', { method: 'POST', body, timeoutMs })
     } catch (err) {
       if (!body.chat_template_kwargs || (err.status !== 400 && err.status !== 422)) throw err
       delete body.chat_template_kwargs // le modèle n'accepte pas l'option : on réessaie sans
-      data = await this.#request('/chat/completions', { method: 'POST', body })
+      data = await this.#request('/chat/completions', { method: 'POST', body, timeoutMs })
     }
     const choice = data?.choices?.[0]
     let content = choice?.message?.content
@@ -117,7 +122,7 @@ export class NvidiaClient {
     if (!text) {
       const why =
         choice?.finish_reason === 'length'
-          ? ' (limite de longueur atteinte : augmente-la avec .tokens ou désactive le raisonnement)'
+          ? ' (limite de longueur atteinte : augmente-la avec .tokens, ou .tokens illimite, ou désactive le raisonnement)'
           : ''
       throw new AIError(`Le modèle a renvoyé une réponse vide${why}.`, { kind: 'empty' })
     }
