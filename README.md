@@ -14,8 +14,8 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 - 👁️ **L'IA voit les images** : une photo reçue (avec ou sans légende) est regardée par un modèle de vision NVIDIA avant la réponse (`.vision` pour régler).
 - 📎 **L'IA envoie des fichiers** : demande-lui une page `.html`, un `.txt`, un `.csv`, du code… elle l'envoie en pièce jointe (avec `.ai`, `.aai` et `.ask`, pas avec `.meai`).
 - ♾️ **Longueur illimitée** possible : `.tokens illimite` ; les longues réponses arrivent en plusieurs messages.
-- 📋 **Menu numéroté** (`.menu`, options 1 à 18 et 0) : tout se règle en répondant par un numéro.
-- 📖 **`.help`** : la liste de toutes les commandes avec leurs explications.
+- 📋 **Menu numéroté** (`.menu`, options 1 à 21 et 0, par thèmes) : affiche tes réglages actuels et reste ouvert pour enchaîner les numéros.
+- 📖 **`.help`** : toutes les commandes par thème ; **`.help <commande>`** donne le détail, des exemples et les autres noms (ex. `.help tokens`).
 - 🎵 **`.song`** et 🎬 **`.video`** : un titre (ou un lien) → miniature → choix **MP3 / audio WhatsApp** ou **MP4 / vidéo WhatsApp**. Accessibles **à tout le monde**, pas seulement à toi.
 - 🧠 **Choix du modèle** parmi tous les modèles NVIDIA (liste paginée, recherche, test automatique).
 - 🔒 **Commandes réservées au propriétaire** : seuls TES messages sont lus comme des commandes, sauf `.song` et `.video` (ouverts à tous).
@@ -85,33 +85,42 @@ Tu peux aussi glisser-déposer les fichiers sur github.com (**Add file → Uploa
 ## 💬 Utilisation
 
 Toutes les commandes commencent par `.` et ne marchent **que depuis ton compte**, sauf **`.song`** et **`.video`** que tes contacts et les groupes peuvent aussi utiliser.
-Le plus simple : envoie **`.menu`** dans ta discussion « Moi » (ou dans n'importe quelle discussion), puis réponds par un numéro. Pour voir toutes les commandes avec leurs explications : **`.help`**.
+Le plus simple : envoie **`.menu`** dans ta discussion « Moi » (ou dans n'importe quelle discussion), puis réponds par un numéro. Pour voir toutes les commandes : **`.help`** (et **`.help <commande>`** pour le détail).
 
 ### Le menu `.menu`
 
 | N° | Option |
 |---|---|
-| 1 | 🤖 Assistant IA ici (on/off) |
-| 2 | 🪞 Répondre à ma place ici (on/off) |
-| 3 | ⛔ Désactiver l'IA ici |
-| 4 | 📋 Discussions actives |
-| 5 | 🧠 Choisir le modèle IA |
-| 6 | 🎭 Personnalité |
-| 7 | 📝 Consignes perso |
-| 8 | 👤 Ton prénom |
-| 9 | 🏷️ Nom du bot |
-| 10 | 🌡️ Créativité (température) |
-| 11 | 📏 Longueur max des réponses |
-| 12 | 🧩 Mémoire (nombre de messages) |
-| 13 | ⏱️ Délai avant réponse |
-| 14 | 👥 Comportement en groupe |
-| 15 | 🕶️ Mode discret & signature |
-| 16 | 🧪 Tester l'IA |
-| 17 | 🧹 Effacer la mémoire ici |
-| 18 | 🔑 Statut & SESSION_ID |
+| | **🤖 IA dans cette discussion** |
+| 1 | 🤖 Assistant IA (on/off) |
+| 2 | 🪞 Répondre à ma place (on/off) |
+| 3 | 🙋 Me répondre aussi, `.aai` (on/off) |
+| 4 | 🛑 Couper l'IA ici |
+| 5 | 📋 Discussions actives |
+| | **🧠 Intelligence** |
+| 6 | 🧠 Modèle |
+| 7 | 👁️ Vision des images |
+| 8 | 💭 Mode réflexion (on/off) |
+| 9 | 🧪 Tester l'IA |
+| | **🎨 Personnalisation** |
+| 10 | 🎭 Personnalité |
+| 11 | 📝 Consignes perso |
+| 12 | 👤 Ton prénom |
+| 13 | 🏷️ Nom du bot |
+| | **⚙️ Réglages** |
+| 14 | 🌡️ Créativité (température) |
+| 15 | 📏 Longueur max des réponses |
+| 16 | 🧩 Mémoire (nombre de messages) |
+| 17 | ⏱️ Délai avant réponse |
+| 18 | 👥 Comportement en groupe |
+| 19 | 🕶️ Mode discret / signature |
+| | **🔧 Outils** |
+| 20 | 🧹 Effacer la mémoire ici |
+| 21 | 📊 Statut & SESSION_ID |
 | 0 | ❌ Fermer le menu |
 
-Quand le bot te demande une valeur, réponds simplement dans la discussion. Tape **0** ou **annuler** pour abandonner (pour la température et le délai, 0 est une vraie valeur : tape **annuler**).
+Le menu affiche la valeur actuelle de chaque réglage (✅ / ⛔, modèle, longueur…) et **reste ouvert** : enchaîne les numéros, tape **menu** pour le revoir et **0** pour le fermer (un message qui n'est pas un numéro le ferme aussi).
+Quand le bot te demande une valeur, réponds simplement dans la discussion. Tape **0** ou **annuler** pour revenir au menu (pour la température, le délai et la longueur, 0 est une vraie valeur : tape **annuler**).
 Pour le modèle : un **numéro** pour choisir, **+** pour la page suivante, ou un **mot** pour chercher (ex. `llama`, `qwen`, `deepseek`).
 
 ### Les commandes
@@ -244,9 +253,9 @@ L'offre gratuite donne 750 heures par mois, assez pour un service allumé 24 h/2
 | « Code incorrect » dans WhatsApp | Le code expire vite : redemande un code et saisis-le tout de suite. Vérifie le numéro (indicatif, sans 0 ni +). |
 | Statut « Déconnecté » | L'appareil a été retiré dans WhatsApp : refais l'appairage puis remplace `SESSION_ID` sur Render. |
 | Statut « Ouvert ailleurs » | Le même SESSION_ID tourne à deux endroits (autre service, ton PC…) : n'en garde qu'un seul. |
-| L'IA ne répond pas | Vérifie `NVIDIA_API_KEY`, puis teste avec `.test` (option 16). Les erreurs arrivent dans ta discussion « Moi ». |
+| L'IA ne répond pas | Vérifie `NVIDIA_API_KEY`, puis teste avec `.test` (option 9 du menu). Les erreurs arrivent dans ta discussion « Moi ». |
 | « Active d'abord .ai ou .meai » | `.aai` a besoin que `.ai` ou `.meai` soit déjà actif dans la discussion. |
-| Modèle indisponible (erreur 404) | Choisis-en un autre avec `.models` (option 5). |
+| Modèle indisponible (erreur 404) | Choisis-en un autre avec `.models` (option 6 du menu). |
 | Erreur 429 | Trop de requêtes pour ta clé NVIDIA : patiente un peu ou augmente le délai (`.delai`). |
 | Réglages perdus après un redémarrage | Normal sans base de données : le disque gratuit de Render est effacé à chaque redémarrage. Réactive `.ai` / `.meai` / `.aai`, ou ajoute `MONGODB_URI` pour tout garder. |
 | `.song`/`.video` : « YouTube bloque le serveur » | Ajoute tes cookies YouTube (voir « Musique et vidéos »). |

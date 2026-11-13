@@ -667,11 +667,78 @@ await test("Bot : l'IA voit les images, envoie des fichiers, tokens illimités",
   await up(incoming(self, '.tokens 10', { fromMe: true }))
   assert.equal(settings.get('maxTokens'), 2048)
   await up(incoming(self, '.menu', { fromMe: true }))
-  await up(incoming(self, '11', { fromMe: true }))
+  await up(incoming(self, '15', { fromMe: true }))
   await up(incoming(self, '0', { fromMe: true }))
   assert.equal(settings.get('maxTokens'), 0, 'dans le menu, 0 = illimité')
   await up(incoming(self, '.reglages', { fromMe: true }))
   assert.match(wa.sent.at(-1).text, /Longueur max : illimitée/)
+  await kv.close()
+})
+
+await test('Bot : .help par thème, .help <commande>, menu détaillé qui reste ouvert', async () => {
+  const kv = await newKv('bot-help')
+  const settings = new Settings(kv)
+  const wa = new FakeWA()
+  const bot = new Bot({ wa, kv, settings, ai: fakeAI, config: { prefix: '.', botName: 'Nova', ownerName: '' }, log: silent })
+  const self = wa.me.id
+  const up = async (text, wait = 30) => {
+    await bot.onUpsert({ messages: [incoming(self, text, { fromMe: true })], type: 'notify' })
+    await sleep(wait)
+  }
+  const last = () => wa.sent.at(-1).text
+  const { HELP, COMMANDS } = bot.commands
+
+  // chaque entrée de l'aide est une vraie commande, et chaque commande a son aide
+  for (const h of HELP) assert.ok(Object.hasOwn(COMMANDS, h.cmd), h.cmd)
+  const documented = new Set(HELP.map((h) => COMMANDS[h.cmd]))
+  for (const [name, fn] of Object.entries(COMMANDS)) assert.ok(documented.has(fn), `.${name} n'a pas d'aide`)
+
+  await up('.help')
+  let txt = last()
+  assert.match(txt, /\*🧠 Modèle & capacités\*/)
+  assert.match(txt, /\*\.tokens\* <64-8192 ou illimite> — longueur max des réponses/)
+  assert.match(txt, /help <commande>/)
+  assert.ok(txt.length <= 4000, `aide en un seul message (${txt.length} caractères)`)
+  await up('.help .tokens')
+  assert.match(last(), /📖 \*\.tokens\*/)
+  assert.match(last(), /\*Exemples\*\n- \.tokens 2048\n- \.tokens illimite/)
+  await up('.help ia')
+  assert.match(last(), /📖 \*\.ai\* \[on\/off\]/)
+  assert.match(last(), /Autres noms : \.ia/)
+  await up('.help musique')
+  assert.match(last(), /📖 \*\.song\*/)
+  await up('.help tok')
+  assert.match(last(), /Tu cherches peut-être \*\.tokens\*/)
+
+  // menu : sections, valeurs actuelles, et il reste ouvert entre deux choix
+  await up('.menu')
+  txt = last()
+  assert.match(txt, /\*🧠 Intelligence\*/)
+  assert.match(txt, /Longueur max — _1024 tokens_/)
+  assert.match(txt, /Vision des images — ✅/)
+  assert.match(txt, /Me répondre aussi — ⛔/)
+  const num = (label) => String(txt.match(new RegExp(`\\*(\\d+)\\.\\* \\S+ ${label}`))[1])
+  await up(num('Mode réflexion'))
+  assert.equal(settings.get('reasoning'), true)
+  await up(num('Mode réflexion'))
+  assert.equal(settings.get('reasoning'), false, 'le menu est resté ouvert')
+  await up(num('Délai avant réponse'))
+  await up('7')
+  assert.equal(settings.get('replyDelay'), 7)
+  await up(num('Vision des images'))
+  await up('2')
+  assert.equal(settings.get('vision'), false)
+  await up(num('Personnalité'))
+  await up('0')
+  assert.match(last(), /Annulé. Le menu est toujours ouvert/)
+  await up('menu')
+  assert.match(last(), /Vision des images — ⛔/)
+  assert.match(last(), /Délai avant réponse — _7 s_/)
+  await up('0')
+  assert.match(last(), /Menu fermé/)
+  const n = wa.sent.length
+  await up('12')
+  assert.equal(wa.sent.length, n, 'menu fermé : « 12 » est un message normal')
   await kv.close()
 })
 
@@ -1005,7 +1072,7 @@ await test('Bot : .song bababoy → miniature, « 1 » = MP3 (fichier), « 2 » 
 
   // .help et .statut mentionnent la fonction
   await up(incoming(self, '.help', { fromMe: true }))
-  assert.match(wa.sent.at(-1).text, /\.song <titre ou lien>[\s\S]*\.video <titre ou lien>/)
+  assert.match(wa.sent.at(-1).text, /\.song\*? <titre ou lien>[\s\S]*\.video\*? <titre ou lien>/)
   await up(incoming(self, '.statut', { fromMe: true }))
   assert.match(wa.sent.at(-1).text, /Musique\/vidéo : yt-dlp test/)
 })
