@@ -489,97 +489,270 @@ export function createCommands(bot) {
     return say(`🏓 Pong ! En ligne depuis ${formatDuration(Date.now() - bot.startedAt)}.`)
   }
 
-  /** .help : toutes les commandes avec leurs explications (sans menu). */
-  async function commandList({ say }) {
-    return say(
-      [
-        `📖 *Commandes de ${settings.get('botName')}* — toi seul peux les utiliser`,
-        '',
-        '*🤖 IA dans une discussion*',
-        `${P}ai [on/off] — l'assistant IA répond aux messages reçus ici (dans « Moi » : ton IA privée)`,
-        `${P}meai [on/off] — l'IA répond à ta place, avec ton style`,
-        `${P}aai [on/off] — l'IA te répond aussi à toi ici, même en groupe (${P}ai ou ${P}meai doit être actif)`,
-        `${P}stop — coupe l'IA dans cette discussion`,
-        `${P}stopall — coupe l'IA partout`,
-        `${P}actifs — discussions où l'IA est active`,
-        `${P}ask <question> — l'IA répond à ta question dans cette discussion`,
-        `${P}reset — efface la mémoire de cette discussion (${P}reset tout : toutes)`,
-        '',
-        '*🧠 Modèle IA*',
-        `${P}models [page ou mot] — liste des modèles NVIDIA, par pages ou par recherche`,
-        `${P}model <numéro ou nom> — choisir le modèle`,
-        `${P}test [question] — tester l'IA et son temps de réponse`,
-        `${P}reflexion on/off — l'IA réfléchit avant de répondre (plus lent)`,
-        `${P}vision [on/off ou modèle] — l'IA regarde les images reçues`,
-        '',
-        '*⚙️ Réglages*',
-        `${P}owner <prénom> — ton prénom, utilisé par l'IA`,
-        `${P}nom <nom> — nom du bot`,
-        `${P}perso <texte> — personnalité de l'IA`,
-        `${P}prompt <texte> — consignes perso (qui tu es, ta façon d'écrire…)`,
-        `${P}temp <0-2> — créativité des réponses`,
-        `${P}tokens <64-8192 ou illimite> — longueur max des réponses`,
-        `${P}memoire <2-100> — nombre de messages retenus par discussion`,
-        `${P}delai <0-120> — secondes d'attente avant de répondre`,
-        `${P}groupes tout/mention — en groupe : répondre à tout, ou seulement quand on te mentionne`,
-        `${P}discret on/off — efface tes commandes et répond dans « Moi »`,
-        `${P}signature on/off — signe les réponses de l'assistant`,
-        `${P}reglages — voir tous les réglages`,
-        `${P}reinit — remettre les réglages par défaut`,
-        '',
-        '*🎵 Musique & vidéos*',
-        `${P}song <titre ou lien> — miniature, puis MP3 (fichier) ou audio WhatsApp`,
-        `${P}video <titre ou lien> — miniature, puis MP4 (fichier) ou vidéo WhatsApp`,
-        '',
-        '*🔑 Compte*',
-        `${P}statut — état du bot`,
-        `${P}session — recevoir ton SESSION_ID dans « Moi »`,
-        `${P}ping — vérifier que le bot répond`,
-        `${P}menu — menu numéroté`,
-        `${P}help — cette liste`,
-      ].join('\n'),
+  // ---------- aide ----------
+
+  // Une entrée par commande : résumé pour .help, détail et exemples pour .help <commande>
+  const HELP_CATS = [
+    ['ia', '🤖 IA dans une discussion'],
+    ['modele', '🧠 Modèle & capacités'],
+    ['perso', '🎨 Personnalisation'],
+    ['reglages', '⚙️ Réglages'],
+    ['media', '🎵 Musique & vidéos (ouvert à tous)'],
+    ['compte', '🔑 Compte'],
+  ]
+  const HELP = [
+    { cat: 'ia', cmd: 'ai', args: '[on/off]', short: "l'assistant IA répond aux messages reçus ici", detail: "L'assistant IA répond aux messages reçus dans cette discussion, en se présentant comme ton assistant. Dans « Moi », c'est ton IA privée.", examples: ['ai', 'ai off'] },
+    { cat: 'ia', cmd: 'meai', args: '[on/off]', short: "l'IA répond à ta place, avec ton style", detail: "L'IA répond comme toi, en imitant ton style. Si tu réponds toi-même avant elle, elle se tait. Remplace .ai dans cette discussion.", examples: ['meai', 'meai off'] },
+    { cat: 'ia', cmd: 'aai', args: '[on/off]', short: "l'IA te répond aussi à toi ici", detail: "L'IA répond aussi à TES messages dans cette discussion (privée ou groupe), en les citant. Il faut d'abord .ai ou .meai.", examples: ['aai', 'aai off'] },
+    { cat: 'ia', cmd: 'stop', short: "coupe l'IA dans cette discussion", detail: 'Désactive .ai, .meai et .aai dans cette discussion.' },
+    { cat: 'ia', cmd: 'stopall', short: "coupe l'IA partout", detail: "Désactive l'IA dans toutes les discussions." },
+    { cat: 'ia', cmd: 'actifs', short: "discussions où l'IA est active" },
+    { cat: 'ia', cmd: 'ask', args: '<question>', short: 'question directe, réponse dans la discussion', detail: "L'IA répond à ta question directement dans cette discussion (visible par tous). Elle peut aussi envoyer un fichier.", examples: ['ask résume la Révolution française', 'ask fais-moi un CV en page html'] },
+    { cat: 'ia', cmd: 'reset', args: '[tout]', short: 'efface la mémoire de cette discussion', detail: "L'IA oublie la conversation ici ; *tout* : dans toutes les discussions.", examples: ['reset', 'reset tout'] },
+    { cat: 'modele', cmd: 'models', args: '[page ou mot]', short: 'liste des modèles NVIDIA', detail: 'Liste des modèles NVIDIA par pages de 15, ou recherche par mot.', examples: ['models', 'models 2', 'models llama'] },
+    { cat: 'modele', cmd: 'model', args: '<numéro ou nom>', short: 'choisir le modèle', detail: "Change le modèle de l'IA. Il est testé tout de suite ; s'il ne marche pas, l'ancien revient.", examples: ['model 3', 'model deepseek'] },
+    { cat: 'modele', cmd: 'vision', args: '[on/off ou modèle]', short: "l'IA regarde les images reçues", detail: "Quand on envoie une photo, un modèle de vision la décrit à l'IA, qui peut y réagir et s'en souvenir. *vision <modèle>* change ce modèle, *vision reset* remet celui par défaut.", examples: ['vision', 'vision off', 'vision llama-3.2-90b-vision'] },
+    { cat: 'modele', cmd: 'reflexion', args: '[on/off]', short: 'réfléchir avant de répondre (plus lent)', detail: 'Les modèles compatibles réfléchissent avant de répondre : plus lent, parfois plus juste.' },
+    { cat: 'modele', cmd: 'test', args: '[question]', short: "tester l'IA et son temps de réponse", examples: ['test', 'test Combien font 17 × 23 ?'] },
+    { cat: 'perso', cmd: 'perso', args: '<texte>', short: "personnalité de l'IA", examples: ['perso sarcastique mais bienveillant', 'perso reset'] },
+    { cat: 'perso', cmd: 'prompt', args: '<texte>', short: "consignes perso (qui tu es, ta façon d'écrire…)", examples: ['prompt Je suis étudiant à Lyon, tutoie tout le monde', 'prompt reset'] },
+    { cat: 'perso', cmd: 'owner', args: '<prénom>', short: "ton prénom, utilisé par l'IA", examples: ['owner Alex'] },
+    { cat: 'perso', cmd: 'nom', args: '<nom>', short: 'nom du bot', examples: ['nom Nova'] },
+    { cat: 'reglages', cmd: 'temp', args: '<0-2>', short: 'créativité des réponses', detail: '0 = précis et constant • 0.7 = équilibré • 1.2+ = très créatif.', examples: ['temp 0.7'] },
+    { cat: 'reglages', cmd: 'tokens', args: '<64-8192 ou illimite>', short: 'longueur max des réponses', detail: "1 token ≈ 0,75 mot. *illimite* (ou 0) : plus de limite, le modèle s'arrête à sa propre limite et les longues réponses arrivent en plusieurs messages. Augmente-la pour les gros fichiers.", examples: ['tokens 2048', 'tokens illimite'] },
+    { cat: 'reglages', cmd: 'memoire', args: '<2-100>', short: 'messages retenus par discussion', examples: ['memoire 30'] },
+    { cat: 'reglages', cmd: 'delai', args: '<0-120>', short: "secondes d'attente avant de répondre", detail: "J'attends ce délai pour regrouper les messages envoyés à la suite.", examples: ['delai 5'] },
+    { cat: 'reglages', cmd: 'groupes', args: 'tout/mention', short: 'en groupe : répondre à tout, ou seulement si on te mentionne', examples: ['groupes mention'] },
+    { cat: 'reglages', cmd: 'discret', args: '[on/off]', short: 'efface tes commandes et répond dans « Moi »' },
+    { cat: 'reglages', cmd: 'signature', args: '[on/off]', short: "signe les réponses de l'assistant" },
+    { cat: 'reglages', cmd: 'reglages', short: 'voir tous les réglages' },
+    { cat: 'reglages', cmd: 'reinit', short: 'remettre les réglages par défaut', detail: 'Les discussions actives sont conservées.' },
+    { cat: 'media', cmd: 'song', args: '<titre ou lien>', short: 'musique : MP3 (fichier) ou audio WhatsApp', detail: 'Envoie la miniature, puis réponds *1* (MP3 en fichier) ou *2* (audio WhatsApp). Tes contacts peuvent aussi l’utiliser.', examples: ['song bababoy'] },
+    { cat: 'media', cmd: 'video', args: '<titre ou lien>', short: 'vidéo : MP4 (fichier) ou vidéo WhatsApp', detail: 'Envoie la miniature, puis réponds *1* (MP4 en fichier) ou *2* (vidéo WhatsApp). Tes contacts peuvent aussi l’utiliser.', examples: ['video daft punk around the world'] },
+    { cat: 'compte', cmd: 'statut', short: 'état du bot' },
+    { cat: 'compte', cmd: 'session', short: 'recevoir ton SESSION_ID dans « Moi »', detail: 'Garde-le secret : il donne accès à ton WhatsApp.' },
+    { cat: 'compte', cmd: 'ping', short: 'vérifier que le bot répond' },
+    { cat: 'compte', cmd: 'menu', short: 'menu numéroté (tout régler avec des numéros)' },
+    { cat: 'compte', cmd: 'help', args: '[commande]', short: "cette aide, ou le détail d'une commande", examples: ['help', 'help tokens'] },
+  ]
+  const usage = (h) => `*${P}${h.cmd}*${h.args ? ` ${h.args}` : ''}`
+
+  /** .help <commande> : détail, exemples et autres noms d'une commande. */
+  function commandHelp(query) {
+    const name = query.startsWith(P) ? query.slice(P.length) : query
+    const fn = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : null
+    const entry = fn && HELP.find((h) => COMMANDS[h.cmd] === fn)
+    if (!entry) {
+      const close = HELP.filter((h) => name && (h.cmd.includes(name) || name.includes(h.cmd))).map((h) => `*${P}${h.cmd}*`)
+      return `❓ Je ne connais pas « ${query} ».${close.length ? ` Tu cherches peut-être ${close.slice(0, 3).join(', ')} ?` : ''}\n👉 *${P}help* pour toutes les commandes.`
+    }
+    const aliases = Object.keys(COMMANDS).filter((k) => k !== entry.cmd && COMMANDS[k] === fn)
+    const detail = entry.detail || `${entry.short.charAt(0).toUpperCase()}${entry.short.slice(1)}.`
+    return [
+      `📖 ${usage(entry)}`,
+      detail,
+      entry.examples?.length ? `\n*Exemples*\n${entry.examples.map((e) => `- ${P}${e}`).join('\n')}` : '',
+      aliases.length ? `\n_Autres noms : ${aliases.map((x) => P + x).join(', ')}_` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  /** .help : toutes les commandes par thème ; .help <commande> : le détail. */
+  async function commandList({ arg, say }) {
+    const query = String(arg || '').trim().toLowerCase()
+    if (query) return say(commandHelp(query))
+    const lines = [`📖 *Aide de ${settings.get('botName')}*`, '_Commandes réservées à toi, sauf 🎵 (ouvertes à tous)._']
+    for (const [cat, title] of HELP_CATS) {
+      lines.push('', `*${title}*`, ...HELP.filter((h) => h.cat === cat).map((h) => `${usage(h)} — ${h.short}`))
+    }
+    lines.push(
+      '',
+      '💡 *Bon à savoir*',
+      settings.get('vision')
+        ? "- Envoie une photo : l'IA la voit et peut en parler."
+        : `- La vision est coupée : *${P}vision on* pour que l'IA voie les photos.`,
+      "- Demande un fichier (.html, .txt, .csv…) : l'IA l'envoie en pièce jointe.",
+      `- *${P}help <commande>* : détail et exemples (ex : *${P}help tokens*).`,
+      `- *${P}menu* : tout régler en répondant par des numéros.`,
     )
+    return say(lines.join('\n'))
   }
 
   // ---------- menu numéroté ----------
 
-  const MENU = [
-    [1, '🤖', 'Assistant IA ici (on/off)'],
-    [2, '🪞', 'Répondre à ma place ici (on/off)'],
-    [3, '⛔', "Désactiver l'IA ici"],
-    [4, '📋', 'Discussions actives'],
-    [5, '🧠', 'Choisir le modèle IA'],
-    [6, '🎭', 'Personnalité'],
-    [7, '📝', 'Consignes perso'],
-    [8, '👤', 'Ton prénom'],
-    [9, '🏷️', 'Nom du bot'],
-    [10, '🌡️', 'Créativité (température)'],
-    [11, '📏', 'Longueur max des réponses'],
-    [12, '🧩', 'Mémoire (nombre de messages)'],
-    [13, '⏱️', 'Délai avant réponse'],
-    [14, '👥', 'Comportement en groupe'],
-    [15, '🕶️', 'Mode discret & signature'],
-    [16, '🧪', "Tester l'IA"],
-    [17, '🧹', 'Effacer la mémoire ici'],
-    [18, '🔑', 'Statut & SESSION_ID'],
-    [0, '❌', 'Fermer le menu'],
-  ]
   const ZERO_IS_VALUE = new Set(['temp', 'delai', 'tokens']) // étapes où « 0 » est une vraie valeur (tokens : 0 = illimité)
   const CANCEL = /^(annuler|cancel|x)$/i
+  const yes = (v) => (v ? '✅' : '⛔')
+  const cut = (s, n = 28) => (String(s).length > n ? `${String(s).slice(0, n - 1)}…` : String(s))
+  const onOff = (v) => (v ? 'activé' : 'désactivé')
+
+  /** Question d'une option du menu : la réponse revient dans STEPS[step], puis le menu se rouvre. */
+  function askFor(a, step, text) {
+    bot.setPending(a.menuChat, { step, target: a.t, menu: true })
+    return a.say(`${text}\n\n_Réponds *${ZERO_IS_VALUE.has(step) ? 'annuler' : '0'}* pour revenir au menu._`)
+  }
+
+  async function chooseModel(a) {
+    const list = await ai.client.listModels()
+    modelList = list
+    bot.setPending(a.menuChat, { step: 'model', target: a.t, page: 1, list, query: '', menu: true })
+    return a.say(renderModelPage(list, 1, '', MODEL_FOOTER))
+  }
+
+  // Les numéros suivent l'ordre d'affichage ; value = état actuel montré dans le menu
+  const MENU_SECTIONS = [
+    [
+      '🤖 IA dans cette discussion',
+      [
+        { icon: '🤖', label: 'Assistant IA', value: (t) => yes(settings.isActive('ai', t.ids)), run: (a) => toggleMode(a, 'ai') },
+        { icon: '🪞', label: 'Répondre à ma place', value: (t) => yes(settings.isActive('meai', t.ids)), run: (a) => toggleMode(a, 'meai') },
+        { icon: '🙋', label: 'Me répondre aussi', value: (t) => yes(settings.isActive('aai', t.ids)), run: toggleAai },
+        { icon: '🛑', label: "Couper l'IA ici", run: stopHere },
+        {
+          icon: '📋',
+          label: 'Discussions actives',
+          value: () => {
+            const { ai: x, meai: y } = bot.activeList()
+            return String(new Set([...x, ...y]).size)
+          },
+          run: listActive,
+        },
+      ],
+    ],
+    [
+      '🧠 Intelligence',
+      [
+        { icon: '🧠', label: 'Modèle', value: () => `_${cut(String(settings.get('model')).split('/').pop(), 32)}_`, run: chooseModel },
+        {
+          icon: '👁️',
+          label: 'Vision des images',
+          value: () => yes(settings.get('vision')),
+          run: (a) =>
+            askFor(
+              a,
+              'vision',
+              `👁️ Vision : *${onOff(settings.get('vision'))}* • modèle : *${settings.get('visionModel')}*\n\n*1.* Activer\n*2.* Désactiver\n*3.* Modèle par défaut\nOu envoie le nom d'un modèle qui accepte les images (ex : llama-3.2-90b-vision).`,
+            ),
+        },
+        { icon: '💭', label: 'Mode réflexion', value: () => yes(settings.get('reasoning')), run: reasoning },
+        { icon: '🧪', label: "Tester l'IA", run: test },
+      ],
+    ],
+    [
+      '🎨 Personnalisation',
+      [
+        {
+          icon: '🎭',
+          label: 'Personnalité',
+          value: () => `_${cut(settings.get('personality'))}_`,
+          run: (a) => askFor(a, 'perso', `🎭 Personnalité actuelle : _${settings.get('personality')}_\n\nEnvoie la nouvelle personnalité (ex : « sarcastique mais bienveillant »), ou *reset*.`),
+        },
+        {
+          icon: '📝',
+          label: 'Consignes perso',
+          value: () => (settings.get('customPrompt') ? `_${cut(settings.get('customPrompt'))}_` : '_aucune_'),
+          run: (a) => {
+            const current = settings.get('customPrompt')
+            return askFor(a, 'prompt', `📝 Consignes actuelles : ${current ? `_${current}_` : '_aucune_'}\n\nEnvoie tes consignes (ex : « Je suis étudiant à Lyon, tutoie tout le monde »), ou *reset* pour les effacer.`)
+          },
+        },
+        {
+          icon: '👤',
+          label: 'Ton prénom',
+          value: () => `_${bot.ownerName() || '?'}_`,
+          run: (a) => askFor(a, 'owner', `👤 Prénom actuel : *${bot.ownerName() || '?'}*\n\nEnvoie ton prénom (l'IA l'utilise pour parler de toi et à ta place).`),
+        },
+        {
+          icon: '🏷️',
+          label: 'Nom du bot',
+          value: () => `_${settings.get('botName')}_`,
+          run: (a) => askFor(a, 'nom', `🏷️ Nom actuel du bot : *${settings.get('botName')}*\n\nEnvoie le nouveau nom.`),
+        },
+      ],
+    ],
+    [
+      '⚙️ Réglages',
+      [
+        {
+          icon: '🌡️',
+          label: 'Créativité',
+          value: () => `_${settings.get('temperature')}_`,
+          run: (a) => askFor(a, 'temp', `🌡️ Température actuelle : *${settings.get('temperature')}*\n\nEnvoie un nombre entre 0 et 2 (0 = précis • 0.7 = équilibré • 1.2 = très créatif).`),
+        },
+        {
+          icon: '📏',
+          label: 'Longueur max',
+          value: () => `_${tokensText(settings.get('maxTokens'))}_`,
+          run: (a) =>
+            askFor(a, 'tokens', `📏 Longueur max actuelle : *${tokensText(settings.get('maxTokens'))}*\n\nEnvoie un nombre entre 64 et 8192 (1 token ≈ 0,75 mot), ou *illimite* (ou *0*) pour ne plus limiter.`),
+        },
+        {
+          icon: '🧩',
+          label: 'Mémoire',
+          value: () => `_${settings.get('memory')} messages_`,
+          run: (a) => askFor(a, 'memoire', `🧩 Mémoire actuelle : *${settings.get('memory')} messages*\n\nEnvoie un nombre entre 2 et 100.`),
+        },
+        {
+          icon: '⏱️',
+          label: 'Délai avant réponse',
+          value: () => `_${settings.get('replyDelay')} s_`,
+          run: (a) => askFor(a, 'delai', `⏱️ Délai actuel : *${settings.get('replyDelay')} s*\n\nEnvoie un nombre de secondes entre 0 et 120.`),
+        },
+        {
+          icon: '👥',
+          label: 'En groupe',
+          value: () => (settings.get('groupMode') === 'all' ? '_répond à tout_' : '_si mentionné_'),
+          run: (a) =>
+            askFor(
+              a,
+              'groupes',
+              `👥 En groupe, je réponds actuellement ${settings.get('groupMode') === 'all' ? 'à *tous* les messages' : 'seulement quand on te *mentionne*'}.\n\n*1.* Répondre à tous les messages\n*2.* Seulement quand on te mentionne ou te répond`,
+            ),
+        },
+        {
+          icon: '🕶️',
+          label: 'Discret / signature',
+          value: () => `${yes(settings.get('discreet'))} / ${yes(settings.get('signature'))}`,
+          run: (a) =>
+            askFor(
+              a,
+              'discret',
+              `🕶️ Mode discret : *${onOff(settings.get('discreet'))}* • ✍️ Signature : *${onOff(settings.get('signature'))}*\n\n*1.* Activer le mode discret\n*2.* Désactiver le mode discret\n*3.* Activer la signature\n*4.* Désactiver la signature`,
+            ),
+        },
+      ],
+    ],
+    [
+      '🔧 Outils',
+      [
+        { icon: '🧹', label: 'Effacer la mémoire ici', run: resetMemory },
+        {
+          icon: '📊',
+          label: 'Statut & SESSION_ID',
+          run: async (a) => {
+            await status(a)
+            return session(a)
+          },
+        },
+      ],
+    ],
+  ]
+  const MENU_ITEMS = MENU_SECTIONS.flatMap(([, items]) => items)
+  const MENU = [...MENU_ITEMS.map((it, i) => [i + 1, it.icon, it.label]), [0, '❌', 'Fermer le menu']]
 
   function menuText(t) {
-    const s = settings.all()
-    const state = settings.isActive('meai', t.ids) ? '🪞 à ta place' : settings.isActive('ai', t.ids) ? '🤖 assistant' : '💤 inactive'
-    const aai = settings.isActive('aai', t.ids) ? ' + 🙋 te répond aussi' : ''
-    return [
-      `*${s.botName} — Menu*`,
-      `📍 Discussion : _${bot.label(t.chat)}_ • IA : ${state}${aai}`,
-      `🧠 ${s.model}`,
-      '',
-      ...MENU.map(([n, e, l]) => `*${n}.* ${e} ${l}`),
-      '',
-      '_Réponds avec un numéro (ex : *1*)._',
-    ].join('\n')
+    const lines = [`📋 *Menu de ${settings.get('botName')}*`, `📍 Discussion : _${bot.label(t.chat)}_`]
+    let n = 0
+    for (const [title, items] of MENU_SECTIONS) {
+      lines.push('', `*${title}*`)
+      for (const it of items) {
+        const v = it.value?.(t)
+        lines.push(`*${++n}.* ${it.icon} ${it.label}${v ? ` — ${v}` : ''}`)
+      }
+    }
+    lines.push('', '*0.* ❌ Fermer le menu', '', '_Réponds avec un numéro. Le menu reste ouvert : enchaîne les numéros, *menu* pour le revoir, *0* pour le fermer._')
+    return lines.join('\n')
   }
 
   async function menu({ t, say, sayRaw, menuChat }) {
@@ -588,69 +761,13 @@ export function createCommands(bot) {
   }
 
   async function runMenuItem(n, a) {
-    const { t, say, menuChat } = a
-    const askFor = (step, text) => {
-      bot.setPending(menuChat, { step, target: t })
-      return say(`${text}\n\n_Réponds *${ZERO_IS_VALUE.has(step) ? 'annuler' : '0'}* pour annuler._`)
+    if (n === 0) return a.say('👋 Menu fermé.')
+    const item = MENU_ITEMS[n - 1]
+    if (!item) {
+      bot.setPending(a.menuChat, { step: 'menu', target: a.t })
+      return a.say(`❌ Choisis un numéro entre 0 et ${MENU_ITEMS.length} (*menu* pour revoir la liste).`)
     }
-    const onOff = (v) => (v ? 'activé' : 'désactivé')
-    const call = (fn) => fn({ ...a, arg: '', pending: null })
-    switch (n) {
-      case 0:
-        return say('👋 Menu fermé.')
-      case 1:
-        return toggleMode({ ...a, arg: '' }, 'ai')
-      case 2:
-        return toggleMode({ ...a, arg: '' }, 'meai')
-      case 3:
-        return call(stopHere)
-      case 4:
-        return call(listActive)
-      case 5: {
-        const list = await ai.client.listModels()
-        modelList = list
-        bot.setPending(menuChat, { step: 'model', target: t, page: 1, list, query: '' })
-        return say(renderModelPage(list, 1, '', MODEL_FOOTER))
-      }
-      case 6:
-        return askFor('perso', `🎭 Personnalité actuelle : _${settings.get('personality')}_\n\nEnvoie la nouvelle personnalité (ex : « sarcastique mais bienveillant »), ou *reset*.`)
-      case 7: {
-        const current = settings.get('customPrompt')
-        return askFor('prompt', `📝 Consignes actuelles : ${current ? `_${current}_` : '_aucune_'}\n\nEnvoie tes consignes (ex : « Je suis étudiant à Lyon, tutoie tout le monde »), ou *reset* pour les effacer.`)
-      }
-      case 8:
-        return askFor('owner', `👤 Prénom actuel : *${bot.ownerName() || '?'}*\n\nEnvoie ton prénom (l'IA l'utilise pour parler de toi et à ta place).`)
-      case 9:
-        return askFor('nom', `🏷️ Nom actuel du bot : *${settings.get('botName')}*\n\nEnvoie le nouveau nom.`)
-      case 10:
-        return askFor('temp', `🌡️ Température actuelle : *${settings.get('temperature')}*\n\nEnvoie un nombre entre 0 et 2 (0 = précis • 0.7 = équilibré • 1.2 = très créatif).`)
-      case 11:
-        return askFor('tokens', `📏 Longueur max actuelle : *${tokensText(settings.get('maxTokens'))}*\n\nEnvoie un nombre entre 64 et 8192 (1 token ≈ 0,75 mot), ou *illimite* (ou *0*) pour ne plus limiter.`)
-      case 12:
-        return askFor('memoire', `🧩 Mémoire actuelle : *${settings.get('memory')} messages*\n\nEnvoie un nombre entre 2 et 100.`)
-      case 13:
-        return askFor('delai', `⏱️ Délai actuel : *${settings.get('replyDelay')} s*\n\nEnvoie un nombre de secondes entre 0 et 120.`)
-      case 14:
-        return askFor(
-          'groupes',
-          `👥 En groupe, je réponds actuellement ${settings.get('groupMode') === 'all' ? 'à *tous* les messages' : 'seulement quand on te *mentionne*'}.\n\n*1.* Répondre à tous les messages\n*2.* Seulement quand on te mentionne ou te répond`,
-        )
-      case 15:
-        return askFor(
-          'discret',
-          `🕶️ Mode discret : *${onOff(settings.get('discreet'))}* • ✍️ Signature : *${onOff(settings.get('signature'))}*\n\n*1.* Activer le mode discret\n*2.* Désactiver le mode discret\n*3.* Activer la signature\n*4.* Désactiver la signature`,
-        )
-      case 16:
-        return call(test)
-      case 17:
-        return call(resetMemory)
-      case 18:
-        await call(status)
-        return call(session)
-      default:
-        bot.setPending(menuChat, { step: 'menu', target: t })
-        return say('❌ Choisis un numéro entre 0 et 18.')
-    }
+    return item.run({ ...a, arg: '', pending: null })
   }
 
   /** Réponses aux questions du menu (le texte que tu envoies après avoir choisi un numéro). */
@@ -672,6 +789,15 @@ export function createCommands(bot) {
         return a.say('❌ Réponds *1*, *2*, *3* ou *4* (*0* pour annuler).')
       }
       return choice[0]({ ...a, arg: choice[1] })
+    },
+    async vision(a) {
+      const input = a.arg.trim()
+      const choice = { 1: 'on', 2: 'off', 3: 'reset' }[input]
+      if (!choice && /^\d+$/.test(input)) {
+        bot.setPending(a.menuChat, { ...a.pending })
+        return a.say("❌ Réponds *1*, *2*, *3* ou le nom d'un modèle (*0* pour revenir au menu).")
+      }
+      return vision({ ...a, arg: choice || input })
     },
     async model(a) {
       const input = a.arg.trim()
@@ -699,7 +825,7 @@ export function createCommands(bot) {
         return a.say(`🔎 Aucun modèle ne contient « ${input} ». Essaie un autre mot (*0* pour annuler).`)
       }
       modelList = found
-      bot.setPending(a.menuChat, { step: 'model', target: a.t, page: 1, list: found, query: input })
+      bot.setPending(a.menuChat, { step: 'model', target: a.t, page: 1, list: found, query: input, menu: state.menu })
       return a.say(renderModelPage(found, 1, input, MODEL_FOOTER))
     },
   }
@@ -713,6 +839,11 @@ export function createCommands(bot) {
       return false // message normal : le choix du format se ferme et le message est traité normalement
     }
     if (pending.step === 'menu' && !/^\d{1,2}$/.test(input)) {
+      if (/^menu$/i.test(input)) {
+        bot.setPending(key, { ...pending })
+        await say(menuText(pending.target))
+        return true
+      }
       bot.clearPending(key)
       if (CANCEL.test(input)) {
         await say('👋 Menu fermé.')
@@ -721,8 +852,14 @@ export function createCommands(bot) {
       return false // message normal : le menu se ferme et le message est traité normalement
     }
     bot.clearPending(key)
+    const backToMenu = () => bot.setPending(key, { step: 'menu', target: pending.target })
     if (CANCEL.test(input) || (input === '0' && pending.step !== 'menu' && !ZERO_IS_VALUE.has(pending.step))) {
-      await say('❎ Annulé.')
+      if (!pending.menu) {
+        await say('❎ Annulé.')
+        return true
+      }
+      backToMenu()
+      await say('❎ Annulé. Le menu est toujours ouvert : envoie un numéro (*menu* pour le revoir, *0* pour le fermer).')
       return true
     }
     const a = { t: pending.target, arg: input, say, sayHere: say, sayRaw: say, menuChat, pending, pendingKey: key }
@@ -734,11 +871,15 @@ export function createCommands(bot) {
       bot.log.error({ err: err?.message, step: pending.step }, 'Erreur du menu')
       await say(`⚠️ ${err?.message || err}`)
     }
+    // Le menu reste ouvert pour enchaîner les réglages (sauf « 0 » ou si une autre question attend sa réponse)
+    const fromMenu = pending.step === 'menu' ? input !== '0' : !!pending.menu
+    if (fromMenu && !bot.getPending(key)) backToMenu()
     return true
   }
 
   // ---------- commandes tapées ----------
 
+  const aiCmd = (a) => toggleMode(a, 'ai')
   const COMMANDS = {
     menu,
     help: commandList,
@@ -746,8 +887,8 @@ export function createCommands(bot) {
     commandes: commandList,
     cmds: commandList,
     commands: commandList,
-    ai: (a) => toggleMode(a, 'ai'),
-    ia: (a) => toggleMode(a, 'ai'),
+    ai: aiCmd,
+    ia: aiCmd,
     meai: (a) => toggleMode(a, 'meai'),
     aai: toggleAai,
     stop: stopHere,
@@ -892,5 +1033,6 @@ export function createCommands(bot) {
     mediaIdle: mediaCmds.idle,
     COMMANDS,
     MENU,
+    HELP,
   }
 }
