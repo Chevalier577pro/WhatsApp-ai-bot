@@ -4,7 +4,7 @@
  * mode 'meai' -> l'IA répond à ta place, avec ton style
  * mode 'aai'  -> l'assistant te répond à TOI dans une discussion avec quelqu'un d'autre (.aai)
  */
-import { extractFiles } from './files.js'
+import { claimsFile, extractFiles, fileFromMemory, LEGACY_MEMO, stripFakeFiles } from './files.js'
 
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -15,7 +15,10 @@ const VISION_FALLBACKS = ['meta/llama-3.2-90b-vision-instruct']
 const MEDIA_RULE =
   "Les images que tu as pu regarder apparaissent sous la forme [image : description] : réagis-y naturellement, comme si tu voyais l'image (sans parler de « description »). Les autres médias apparaissent entre crochets (ex : [image], [note vocale]) : si on attend ta réaction, dis simplement que tu ne peux pas les voir ou les écouter pour l'instant."
 const FILES_RULE =
-  "Tu peux envoyer des fichiers (.html, .txt, .md, .csv, .json, code…). Quand on te demande un fichier, ou qu'un long contenu (page web, code complet, document) est plus pratique en pièce jointe, écris son contenu complet entre <file name=\"nom.ext\"> et </file> : il sera envoyé comme document WhatsApp. Choisis un nom et une extension adaptés, mets uniquement le contenu du fichier entre les balises (il peut être aussi long que nécessaire) et ajoute une courte phrase en dehors. « [📎 fichier envoyé : nom] » dans l'historique signale un fichier que tu as déjà envoyé."
+  "Tu peux envoyer des fichiers (.html, .txt, .md, .csv, .json, code…). Quand on te demande un fichier, ou qu'un long contenu (page web, code complet, document) est plus pratique en pièce jointe, écris son contenu complet entre <file name=\"nom.ext\"> et </file> : il sera envoyé comme document WhatsApp. Choisis un nom et une extension adaptés, mets uniquement le contenu du fichier entre les balises (il peut être aussi long que nécessaire) et ajoute une courte phrase en dehors. Les fichiers déjà envoyés apparaissent dans l'historique avec ces balises. À chaque nouvelle demande, réécris le fichier en entier entre les balises : annoncer un fichier sans les balises n'envoie rien."
+const FILE_NUDGE =
+  "[Message automatique] Ta réponse annonce un fichier mais ne contient aucune balise <file>, donc rien n'a été envoyé. Si un fichier est demandé, réponds à nouveau en écrivant son contenu complet entre <file name=\"nom.ext\"> et </file>. Sinon, réponds normalement sans parler d'envoi de fichier."
+const FILE_FAILED = "Désolé, je n'ai pas réussi à créer le fichier. Tu peux me le redemander ?"
 
 function formatDate(timeZone, now = new Date()) {
   try {
@@ -93,20 +96,22 @@ export function buildMessages({ mode, settings, history, chat, ownerName, timeZo
   const tagThem = !!chat?.isGroup || history.some(asOwner ? fromAssistant : sentAsOwner)
   const out = []
   for (const h of history) {
+    const t = [String(h.t || '').replace(LEGACY_MEMO, '').trim(), ...(h.f || []).map(fileFromMemory)].filter(Boolean).join('\n')
+    if (!t) continue
     let role
     let content
     if (h.r !== 'me' && h.r !== 'bot') {
       role = 'user'
-      content = tagThem ? `[${h.n || 'Contact'}] ${h.t}` : h.t
+      content = tagThem ? `[${h.n || 'Contact'}] ${t}` : t
     } else if (asOwner) {
       role = fromAssistant(h) ? 'user' : 'assistant'
-      content = fromAssistant(h) ? `[${settings?.botName || 'Assistant'} (assistant IA)] ${h.t}` : h.t
+      content = fromAssistant(h) ? `[${settings?.botName || 'Assistant'} (assistant IA)] ${t}` : t
     } else if (sentAsOwner(h)) {
       role = 'user'
-      content = `[${owner}] ${h.t}`
+      content = `[${owner}] ${t}`
     } else {
       role = 'assistant'
-      content = h.t
+      content = t
     }
     const prev = out[out.length - 1]
     if (prev && prev.role === role) prev.content += `\n${content}`
@@ -169,6 +174,25 @@ export class AIEngine {
     return messages
   }
 
+  /**
+   * Appel du modèle + extraction des fichiers. Si la réponse annonce un fichier sans l'écrire,
+   * on redemande une fois ; sinon les faux « 📎 fichier envoyé » sont retirés.
+   */
+  async #complete({ model, messages, s, names, files = true }) {
+    const opts = { model, temperature: s.temperature, maxTokens: s.maxTokens, reasoning: s.reasoning }
+    const first = await this.client.chat({ ...opts, messages })
+    let res = finish(first, names)
+    if (files && !res.files.length && claimsFile(first.text)) {
+      try {
+        const nudge = [...messages, { role: 'assistant', content: first.text }, { role: 'user', content: FILE_NUDGE }]
+        res = finish(await this.client.chat({ ...opts, messages: nudge }), names)
+      } catch {}
+    }
+    if (!res.files.length) res.text = stripFakeFiles(res.text)
+    if (!res.text && !res.files.length) res.text = FILE_FAILED
+    return res
+  }
+
   async reply({ mode, history, chat, ownerName }) {
     const s = this.settings.all()
     const messages = this.#withReasoningFlag(
@@ -176,14 +200,7 @@ export class AIEngine {
       buildMessages({ mode, settings: s, history, chat, ownerName, timeZone: this.timeZone }),
       s.reasoning,
     )
-    const res = await this.client.chat({
-      model: s.model,
-      messages,
-      temperature: s.temperature,
-      maxTokens: s.maxTokens,
-      reasoning: s.reasoning,
-    })
-    return finish(res, [s.botName, ownerName])
+    return this.#complete({ model: s.model, messages, s, names: [s.botName, ownerName], files: mode !== 'meai' })
   }
 
   /** Question directe à l'IA (commande .ask / .test). */
@@ -209,14 +226,7 @@ export class AIEngine {
       ],
       s.reasoning,
     )
-    const res = await this.client.chat({
-      model: useModel,
-      messages,
-      temperature: s.temperature,
-      maxTokens: s.maxTokens,
-      reasoning: s.reasoning,
-    })
-    return finish(res, [s.botName])
+    return this.#complete({ model: useModel, messages, s, names: [s.botName] })
   }
 
   /** L'IA « regarde » une image : le modèle de vision la décrit, la description rejoint la mémoire. */
