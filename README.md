@@ -5,7 +5,13 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 
 ## ✨ Fonctionnalités
 
-- 🔢 **Site d'appairage** : connexion par code à 8 caractères (ou par QR code), protégée par mot de passe.
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:e36936025427278575447eaaa60dff54b92d3527cecae2f5882c5d781ad75a26 -->
+
+- 🔢 **Site public séparé** : chacun génère son SESSION_ID par code ou QR, sans accès au compte des autres.
+
+<!-- /coderabbit-ai-generated:v1 -->
 - 🔑 **SESSION_ID** : le bot se reconnecte tout seul après chaque redémarrage.
 - 🤖 **`.ai`** : un assistant IA répond aux messages de la discussion où tu l'actives.
 - 🪞 **`.meai`** : l'IA répond **à ta place**, avec ton style (et se tait si tu réponds toi-même).
@@ -24,65 +30,60 @@ Il se connecte à **ton propre compte WhatsApp** (comme WhatsApp Web) grâce à 
 - 🧩 Mémoire par discussion (**500 messages retenus par défaut**), personnalité, consignes perso, température, délai de réponse, signature…
 - ☁️ **Prêt pour GitHub + Render** (`render.yaml` inclus) : fonctionne **sans base de données** (MongoDB en option).
 
-## 🚀 Installation gratuite en 5 étapes
+<!-- coderabbit-ai-generated:v1 -->
 
-### 1. Clé API NVIDIA
+<!-- coderabbit-ai-generated-section:v1:b5862fd6b4c9fff5a9cfff56860aa76110198dde3624b845cd59bf5b57ca5627 -->
 
-1. Crée un compte sur [build.nvidia.com](https://build.nvidia.com).
-2. Ouvre un modèle (par exemple *Nemotron 3 Nano Omni*) → **Get API Key** → copie la clé (`nvapi-…`).
+<!-- coderabbit-ai-generated:v1 -->
 
-### 2. Base de données (facultatif)
+<!-- coderabbit-ai-generated-section:v1:28c34df7bbc2e3e9b0a6dd27aa180692c34f6a0354ae214e70a64a5a1da768c1 -->
 
-Le bot fonctionne **sans base de données** : la session WhatsApp revient toute seule grâce à `SESSION_ID`.
-Sur l'offre gratuite de Render, le disque est **effacé à chaque redémarrage** (redéploiement, mise à jour du code…) : les réglages, les discussions actives (`.ai`, `.meai`, `.aai`) et la mémoire repartent alors à zéro. Pour tout garder, ajoute une base MongoDB gratuite :
+## 🚀 Installer ton propre bot
 
-1. Crée un cluster gratuit **M0** sur [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-2. **Database Access** : crée un utilisateur et un mot de passe.
-3. **Network Access** : ajoute `0.0.0.0/0` (Render n'a pas d'adresse IP fixe).
-4. **Connect → Drivers** : copie l'adresse `mongodb+srv://…` en remplaçant `<db_password>` par ton mot de passe.
-5. Sur Render : **Environment → Add Environment Variable** → `MONGODB_URI` = cette adresse.
+Le dépôt public contient le bot et son point de contrôle HTTP. Le site de génération des sessions et l’administration sont hébergés séparément et leur code est privé.
 
-### 3. Mettre le code sur GitHub
+### 1. Récupérer le bot
 
-Crée un dépôt **privé**, puis envoie les fichiers du projet :
+Sur [GitHub](https://github.com/y8658945-blip/WhatsApp-ai-bot), clique sur **Fork** pour créer ta copie. Tu peux aussi travailler en local avec Node.js 22 :
 
 ```bash
-git init
-git add .
-git commit -m "Bot WhatsApp IA"
-git branch -M main
-git remote add origin https://github.com/TON-PSEUDO/whatsapp-ai-bot.git
-git push -u origin main
+git clone https://github.com/y8658945-blip/WhatsApp-ai-bot.git
+cd WhatsApp-ai-bot
+npm install
+cp .env.example .env
 ```
 
-Tu peux aussi glisser-déposer les fichiers sur github.com (**Add file → Upload files**), sans le dossier `node_modules`.
+### 2. Générer ton SESSION_ID
 
-### 4. Déployer sur Render
+1. Ouvre le [site public](https://whatsapp-ai-bot-tenm.onrender.com/#connect). Son [tutoriel](https://whatsapp-ai-bot-tenm.onrender.com/#guide) détaille l’installation.
+2. Entre ton numéro au format international (exemple fictif : `33612345678`) et demande un code, ou choisis le QR code.
+3. Dans WhatsApp : **Réglages → Appareils connectés → Connecter un appareil → Connecter avec un numéro de téléphone**, puis saisis le code. Pour le QR, scanne-le depuis ce menu.
+4. Copie le `SESSION_ID` affiché. Chaque visiteur a sa propre connexion, accessible uniquement depuis son onglet. Aucun mot de passe admin n’est nécessaire.
+5. La session temporaire expire après **10 minutes** ; le code expire après environ **3 minutes**. Copie le SESSION_ID avant l’expiration. Le site ferme sa connexion lors de la récupération du SESSION_ID pour laisser ton bot prendre le relais, sans révoquer l’appareil WhatsApp.
 
-1. Sur [render.com](https://render.com) : **New → Blueprint**, puis choisis ton dépôt.
-2. Render lit le fichier `render.yaml` et te demande les variables ci-dessous.
-3. Clique sur **Apply** et attends la fin du déploiement (2 à 4 minutes).
+Le site génère des identifiants ; chaque utilisateur héberge son propre bot. Il n’héberge pas un bot permanent pour chaque visiteur. Une limite de connexions simultanées peut demander de patienter. Après un redémarrage du site, recommence si ton onglet a expiré.
 
-| Variable | Quoi mettre |
-|---|---|
-| `NVIDIA_API_KEY` | ta clé NVIDIA (**obligatoire**) |
-| `ADMIN_PASSWORD` | un mot de passe pour protéger le site (**fortement recommandé**) |
-| `OWNER_NAME` | ton prénom (utile pour le mode `.meai`) |
-| `BOT_NAME` | le nom de l'assistant (par défaut « Nova ») |
-| `SESSION_ID` | laisse vide pour l'instant |
+> Le SESSION_ID donne accès à ton WhatsApp. Garde-le dans les variables d’environnement, jamais dans un dépôt, une capture ou un message public. Une seule instance doit utiliser une session donnée.
 
-### 5. Connecter ton WhatsApp
+### 3. Configurer l’IA
 
-1. Ouvre l'adresse de ton service, par exemple `https://whatsapp-ai-bot.onrender.com`.
-2. Entre ton mot de passe admin, puis ton numéro au **format international**, sans le 0 ni le + (ex. `33612345678` pour le 06 12 34 56 78).
-3. Clique sur **Obtenir mon code**.
-4. Sur ton téléphone : **WhatsApp → Réglages → Appareils connectés → Connecter un appareil → Connecter avec un numéro de téléphone**, puis saisis le code.
-5. Une fois connecté, le site affiche ton **SESSION_ID** (le bot te l'envoie aussi dans ta discussion « Moi »).
-6. Sur Render : **Environment → SESSION_ID** → colle la valeur → **Save changes**. Le bot redémarre et se reconnecte tout seul. ✅
+Crée ta clé sur [NVIDIA Build](https://build.nvidia.com) (**Get API Key**). Mets `NVIDIA_API_KEY` et `SESSION_ID` dans ton fichier local `.env` ou les variables de ton hébergeur. Les clés de l’hébergeur du site ne sont pas partagées avec les visiteurs.
 
-> ⚠️ Le SESSION_ID donne accès à ton WhatsApp : ne le partage jamais et ne le mets jamais dans le code sur GitHub.
+### 4. Lancer le bot
 
-## 💬 Utilisation
+**En local** : `npm start`, puis envoie `.menu` dans ta discussion WhatsApp « Moi ».
+
+**Sur Render** : **New → Blueprint**, sélectionne ton fork contenant `render.yaml`, puis renseigne `NVIDIA_API_KEY`, `SESSION_ID` et les paramètres souhaités (`BOT_NAME`, `OWNER_NAME`). Si GitHub ne propose pas ton fork, autorise-le dans l’intégration GitHub de Render. Consulte les [instructions Render](https://render.com/docs/blueprint-spec).
+
+Ce service expose `/health` pour Render ; il n’a pas d’interface d’appairage ni de page admin. Pour refaire l’appairage, retourne sur le site public et remplace `SESSION_ID`.
+
+### 5. Conserver les réglages (facultatif)
+
+Sans MongoDB, le bot écrit dans `DATA_DIR`. Sur une instance Render au disque éphémère, les réglages et la mémoire peuvent disparaître lors d’un redéploiement. `SESSION_ID` permet la reconnexion. Pour conserver aussi les réglages, configure `MONGODB_URI` et `MONGODB_DB` avec une base accessible au service.
+
+
+
+<!-- /coderabbit-ai-generated:v1 -->## 💬 Utilisation
 
 Toutes les commandes commencent par `.` et ne marchent **que depuis ton compte**, sauf **`.song`** et **`.video`** que tes contacts et les groupes peuvent aussi utiliser.
 Le plus simple : envoie **`.menu`** dans ta discussion « Moi » (ou dans n'importe quelle discussion), puis réponds par un numéro. Pour voir toutes les commandes : **`.help`** (et **`.help <commande>`** pour le détail).
@@ -204,7 +205,13 @@ Ces deux commandes sont **ouvertes à tout le monde** : tes contacts et les memb
 | Variable | Rôle | Par défaut |
 |---|---|---|
 | `NVIDIA_API_KEY` | Clé API NVIDIA (**obligatoire**) | — |
-| `ADMIN_PASSWORD` | Mot de passe du site d'appairage | — |
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:2e2f70b7434bf909c04d2d7032cc8b1b6e4559e0725e9401c576c9df49327806 -->
+
+| `PUBLIC_URL` | URL publique du service (facultatif) | — |
+
+<!-- /coderabbit-ai-generated:v1 -->
 | `SESSION_ID` | Session WhatsApp (après l'appairage) | — |
 | `MONGODB_URI` | Facultatif : base MongoDB pour garder réglages et mémoire | — |
 | `MONGODB_DB` | Nom de la base MongoDB | `whatsapp_ai_bot` |
@@ -217,7 +224,13 @@ Ces deux commandes sont **ouvertes à tout le monde** : tes contacts et les memb
 | `TIME_ZONE` | Fuseau horaire | `Europe/Paris` |
 | `LOG_LEVEL` | Niveau de logs (`info`, `debug`…) | `info` |
 | `DATA_DIR` | Dossier des données sans MongoDB | `./data` |
-| `PORT` | Port du site (fourni par Render) | `3000` |
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:4182a624cdb644aaa1af3b3f20a3561584cd8adcbd108bc65884431464ce81de -->
+
+| `PORT` | Port HTTP de santé (fourni par Render) | `3000` |
+
+<!-- /coderabbit-ai-generated:v1 -->
 | `YT_COOKIES` | `.song`/`.video` : cookies YouTube (contenu de cookies.txt, brut ou base64) si YouTube bloque le serveur | — |
 | `YT_COOKIES_FILE` | Chemin d'un fichier cookies.txt (le Secret File Render `cookies.txt` est lu tout seul) | — |
 | `SONG_MAX_MINUTES` · `VIDEO_MAX_MINUTES` | Durée max pour `.song` · `.video` | `30` · `15` |
@@ -268,7 +281,13 @@ L'offre gratuite donne 750 heures par mois, assez pour un service allumé 24 h/2
 src/
 ├── index.js       démarrage du bot
 ├── config.js      variables d'environnement
-├── web/           site (server.js + public/ : page, styles, scène 3D, catalogue des commandes)
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:e357b119e88d8c9e1449e135641b280886d71707c8ce107eaaac3699907bd6f0 -->
+
+├── health.js      contrôle de santé HTTP (aucun site embarqué)
+
+<!-- /coderabbit-ai-generated:v1 -->
 ├── whatsapp/      connexion WhatsApp (Baileys)
 ├── bot/           messages, commandes, menu, mémoire
 ├── ai/            client NVIDIA et construction des prompts

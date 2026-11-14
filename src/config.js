@@ -43,7 +43,6 @@ const int = (key, fallback) => {
 export const config = Object.freeze({
   port: int('PORT', 3000),
   sessionId: env('SESSION_ID'),
-  adminPassword: env('ADMIN_PASSWORD'),
 
   nvidiaApiKey: env('NVIDIA_API_KEY'),
   nvidiaBaseUrl: env('NVIDIA_BASE_URL', 'https://integrate.api.nvidia.com/v1').replace(/\/+$/, ''),

@@ -17,7 +17,7 @@ import { cleanOutput, NvidiaClient } from '../src/ai/nvidia.js'
 import { AIEngine, cleanReply } from '../src/ai/engine.js'
 import { Bot } from '../src/bot/handler.js'
 import { parseSwitch, formatDuration } from '../src/bot/commands.js'
-import { createWebServer } from '../src/web/server.js'
+import { createHealthServer } from '../src/health.js'
 import {
   JobQueue,
   decodeCookies,
@@ -861,108 +861,24 @@ await test('Bot : .help par thème, .help <commande>, menu détaillé qui reste 
   await kv.close()
 })
 
-// ---------- site d'appairage ----------
-
-await test("Site : statut, mot de passe et appairage par code", async () => {
-  const wa = new FakeWA()
-  wa.connected = false
-  wa.status = 'idle'
-  wa.requestPairing = async (phone) => {
-    const number = normalizePhone(phone)
-    wa.status = 'waiting_pair'
-    wa.pairing = { code: 'ABCD-EFGH', phone: number, expiresAt: Date.now() + 180_000 }
-    return 'ABCD-EFGH'
-  }
-  const server = createWebServer({ wa, config: { adminPassword: 'secret', botName: 'Nova', port: 0 }, log: silent, settings: null })
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const base = `http://127.0.0.1:${server.address().port}`
-  const call = async (p, { method = 'GET', body, headers = {} } = {}) => {
-    const res = await fetch(base + p, {
-      method,
-      headers: { 'content-type': 'application/json', ...headers },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-    const text = await res.text()
-    let json = null
-    try {
-      json = JSON.parse(text)
-    } catch {
-      json = null
-    }
-    return { status: res.status, json, text }
-  }
-  try {
-    assert.equal((await call('/health')).status, 200)
-    const st = await call('/api/status')
-    assert.equal(st.json.needsPassword, true)
-    assert.equal(st.json.connected, false)
-    assert.equal((await call('/api/pair', { method: 'POST', body: { phone: '33612345678' } })).status, 401)
-    assert.equal((await call('/api/login', { method: 'POST', body: { password: 'faux' } })).status, 401)
-    assert.equal((await call('/api/login', { method: 'POST', body: { password: 'secret' } })).status, 200)
-    const pair = await call('/api/pair', {
-      method: 'POST',
-      body: { phone: '+33 6 12 34 56 78' },
-      headers: { 'x-admin-password': encodeURIComponent('secret') },
-    })
-    assert.equal(pair.status, 200, pair.text)
-    assert.equal(pair.json.code, 'ABCD-EFGH')
-    assert.ok(pair.json.token)
-    const withToken = await call('/api/status', { headers: { 'x-pair-token': pair.json.token } })
-    assert.equal(withToken.json.pairing?.code, 'ABCD-EFGH')
-    const withoutToken = await call('/api/status')
-    assert.ok(!withoutToken.json.pairing, 'le code ne doit pas être visible sans jeton')
-    const home = await call('/')
-    assert.equal(home.status, 200)
-    assert.match(home.text, /<html/i)
-  } finally {
-    server.closeAllConnections?.()
-    server.close()
-  }
-})
-
-await test('Site : catalogue des commandes, fichiers statiques et infos du tableau de bord', async () => {
-  const kv = await newKv('site-assets')
-  const settings = new Settings(kv)
-  const wa = new FakeWA()
-  const bot = new Bot({ wa, kv, settings, ai: fakeAI, config: { prefix: '.', botName: 'Nova', ownerName: '' }, log: silent })
-  const config = { adminPassword: '', botName: 'Nova', port: 0, prefix: '!', nvidiaApiKey: 'nvapi-test', nvidiaModel: 'org/modele' }
-  const server = createWebServer({ wa, config, log: silent, settings, commands: bot.commands })
+// ---------- serveur de santé du bot public ----------
+await test('Bot public : santé disponible, site et API de sessions absents', async () => {
+  const server = createHealthServer({ wa: new FakeWA() })
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const base = `http://127.0.0.1:${server.address().port}`
   try {
-    const cat = await (await fetch(base + '/api/commands')).json()
-    assert.equal(cat.prefix, '!')
-    assert.equal(cat.commands.length, bot.commands.HELP.length)
-    assert.deepEqual(cat.categories.map((c) => c.id), bot.commands.HELP_CATS.map(([id]) => id))
-    const help = cat.commands.find((c) => c.cmd === 'help')
-    assert.ok(help.aliases.includes('aide'), 'les autres noms sont listés')
-    assert.ok(cat.commands.every((c) => c.short && bot.commands.HELP_CATS.some(([id]) => id === c.cat)))
-
-    const st = await (await fetch(base + '/api/status')).json()
-    assert.equal(st.aiConfigured, true)
-    assert.equal(typeof st.uptime, 'number')
-    assert.ok(st.model)
-
-    for (const [file, type] of [['style.css', /text\/css/], ['app.js', /javascript/], ['scene.js', /javascript/], ['favicon.svg', /svg/]]) {
-      const res = await fetch(`${base}/assets/${file}`)
-      assert.equal(res.status, 200, file)
-      assert.match(res.headers.get('content-type'), type, file)
-      assert.ok((await res.text()).length > 50, file)
+    for (const route of ['/', '/health']) {
+      const res = await fetch(base + route)
+      assert.equal(res.status, 200)
+      const data = await res.json()
+      assert.equal(data.ok, true)
+      assert.equal(data.me, undefined)
+      assert.equal(data.sessionId, undefined)
     }
-    for (const bad of ['/assets/..%2Fserver.js', '/assets/%2e%2e%2fserver.js', '/assets/nope.js', '/assets/index.html', '/assets/']) {
-      assert.equal((await fetch(base + bad)).status, 404, bad)
-    }
-    const html = await (await fetch(base + '/')).text()
-    for (const ref of html.matchAll(/(?:src|href)="(\/assets\/[^"?]+)/g)) {
-      assert.equal((await fetch(base + ref[1])).status, 200, `${ref[1]} référencé par la page`)
-    }
-    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1])
-    assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), [], 'identifiants uniques dans la page')
-  } finally {
-    server.closeAllConnections?.()
-    server.close()
-    await kv.close()
-  }
+    for (const route of ['/admin', '/assets/app.js', '/api/session', '/api/status']) assert.equal((await fetch(base + route)).status, 404)
+    assert.equal((await fetch(base + '/health', { method: 'POST' })).status, 404)
+    assert.equal((await fetch(base + '/health', { method: 'HEAD' })).status, 200)
+  } finally { server.closeAllConnections(); await new Promise((resolve) => server.close(resolve)) }
 })
 
 // ───────────── .song / .video ─────────────
