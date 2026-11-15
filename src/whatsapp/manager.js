@@ -165,7 +165,7 @@ export class WhatsAppManager extends EventEmitter {
     this.sock = sock
     let pairingRequested = false
 
-    sock.ev.on('creds.update', saveCreds)
+    sock.ev.on('creds.update', () => { if (gen === this.generation) return saveCreds() })
 
     sock.ev.on('connection.update', async (update) => {
       if (gen !== this.generation) return

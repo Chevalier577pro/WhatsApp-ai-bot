@@ -18,8 +18,6 @@ services:
         value: Europe/Paris
       - key: NVIDIA_API_KEY
         sync: false
-      - key: ADMIN_PASSWORD
-        sync: false
       - key: SESSION_ID
         sync: false
       - key: OWNER_NAME

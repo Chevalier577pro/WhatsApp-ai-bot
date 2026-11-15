@@ -7,7 +7,7 @@ import { WhatsAppManager } from './whatsapp/manager.js'
 import { NvidiaClient } from './ai/nvidia.js'
 import { AIEngine } from './ai/engine.js'
 import { Bot } from './bot/handler.js'
-import { startWebServer } from './web/server.js'
+import { createHealthServer } from './health.js'
 import { MediaService } from './media/youtube.js'
 
 const KEEP_ALIVE_MS = 10 * 60_000
@@ -32,7 +32,7 @@ async function main() {
     const res = await applyEnvSession(kv, config.sessionId)
     if (res?.reason === 'imported') logger.info("🔑 SESSION_ID chargé depuis les variables d'environnement")
     if (res?.reason === 'revoked') {
-      logger.warn("Ce SESSION_ID a été déconnecté : refais l'appairage depuis le site puis mets à jour la variable SESSION_ID.")
+      logger.warn("Ce SESSION_ID a été déconnecté : refais l'appairage depuis le site public puis mets à jour la variable SESSION_ID.")
     }
   } catch (err) {
     logger.error({ err: err?.message }, 'SESSION_ID invalide : vérifie la variable SESSION_ID')
@@ -48,18 +48,13 @@ async function main() {
   // .song / .video : prépare yt-dlp et ffmpeg en arrière-plan (téléchargés au besoin)
   media.warmup().catch((err) => logger.warn({ err: err?.message }, 'Préparation de .song/.video impossible'))
 
-  if (!config.adminPassword) {
-    logger.warn("ADMIN_PASSWORD non défini : le site n'est protégé que tant que WhatsApp n'est pas connecté. Ajoute un mot de passe sur Render.")
-  } else if (config.adminPassword === 'change-moi') {
-    logger.warn('ADMIN_PASSWORD vaut encore « change-moi » : choisis un vrai mot de passe.')
-  }
-  const server = startWebServer({ wa, config, log: logger, settings, commands: bot.commands })
+  const server = createHealthServer({ wa })
+  server.listen(config.port, '0.0.0.0', () => logger.info(`Contrôle de santé sur le port ${config.port}`))
 
   if (wa.hasSession()) {
     wa.start().catch((err) => logger.error({ err: err?.message }, 'Connexion WhatsApp impossible'))
   } else {
-    const site = config.externalUrl || `http://localhost:${config.port}`
-    logger.info(`📱 Aucune session WhatsApp : ouvre ${site} pour connecter ton compte.`)
+    logger.info('📱 Configure SESSION_ID après avoir généré ta session sur https://whatsapp-ai-bot-tenm.onrender.com.')
   }
 
   // Garde le service gratuit de Render éveillé (il s'endort après 15 min sans visite)

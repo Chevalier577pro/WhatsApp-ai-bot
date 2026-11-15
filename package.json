@@ -1,7 +1,7 @@
 {
   "name": "whatsapp-ai-bot",
   "version": "1.0.0",
-  "description": "Bot WhatsApp IA (modèles NVIDIA) avec site de connexion par code d'appairage, prêt pour Render + GitHub.",
+  "description": "Bot WhatsApp IA public et autonome. Génération du SESSION_ID sur le site séparé.",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
