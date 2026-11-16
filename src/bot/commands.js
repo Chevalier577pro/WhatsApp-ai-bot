@@ -501,8 +501,16 @@ export function createCommands(bot) {
     ['reglages', '⚙️ Réglages'],
     ['media', '🎵 Musique & vidéos (ouvert à tous)'],
     ['compte', '🔑 Compte'],
+    ['outils', '🧰 Petits outils'],
   ]
   const HELP = [
+    { cat: 'outils', cmd: 'calc', args: '<expression>', short: 'calculatrice rapide', detail: 'Calcule une expression mathématique (+ - * / parenthèses, % = modulo).', examples: ['calc 17*23', 'calc (5+3)/2'] },
+    { cat: 'outils', cmd: 'de', args: '[faces]', short: 'lance un dé (6 faces par défaut)', detail: 'Lance un dé. Précise le nombre de faces si tu veux (2 à 1000).', examples: ['de', 'de 20'] },
+    { cat: 'outils', cmd: 'pile', args: '', short: 'pile ou face', detail: 'Tire à pile ou face.', examples: ['pile'] },
+    { cat: 'outils', cmd: '8ball', args: '<question>', short: 'la boule magique répond', detail: 'Pose une question fermée, la boule magique te répond.', examples: ['8ball Je vais réussir ?'] },
+    { cat: 'outils', cmd: 'choix', args: '<a ou b ou c>', short: 'choisit au hasard pour toi', detail: 'Donne plusieurs options séparées par « ou » ou des virgules : le bot choisit.', examples: ['choix pizza ou tacos', 'choix film, série, jeu'] },
+    { cat: 'outils', cmd: 'citation', args: '', short: 'une citation au hasard', detail: 'Envoie une citation inspirante au hasard.', examples: ['citation'] },
+    { cat: 'outils', cmd: 'heure', args: '', short: 'date et heure actuelles', detail: 'Date et heure dans ton fuseau (TIME_ZONE).', examples: ['heure'] },
     { cat: 'ia', cmd: 'ai', args: '[on/off]', short: "l'assistant IA répond aux messages reçus ici", detail: "L'assistant IA répond aux messages reçus dans cette discussion, en se présentant comme ton assistant. Dans « Moi », c'est ton IA privée.", examples: ['ai', 'ai off'] },
     { cat: 'ia', cmd: 'meai', args: '[on/off]', short: "l'IA répond à ta place, avec ton style", detail: "L'IA répond comme toi, en imitant ton style. Si tu réponds toi-même avant elle, elle se tait. Remplace .ai dans cette discussion.", examples: ['meai', 'meai off'] },
     { cat: 'ia', cmd: 'aai', args: '[on/off]', short: "l'IA te répond aussi à toi ici", detail: "L'IA répond aussi à TES messages dans cette discussion (privée ou groupe), en les citant. Il faut d'abord .ai ou .meai.", examples: ['aai', 'aai off'] },
@@ -882,7 +890,75 @@ export function createCommands(bot) {
   // ---------- commandes tapées ----------
 
   const aiCmd = (a) => toggleMode(a, 'ai')
+  // ── 🧰 Petits outils (ajoutés par maj.py — sans dépendance) ──
+  function calcCmd(a) {
+    const { arg, say } = a
+    const expr = String(arg || '').trim()
+    if (!expr) return say('🧮 Donne une expression : *calc 17*23* ou *calc (5+3)/2*')
+    if (expr.length > 120 || !/^[0-9+\-*/().,%\s]+$/.test(expr)) return say('🧮 Expression invalide : chiffres et + - * / ( ) . , % uniquement.')
+    try {
+      const val = Function('"use strict"; return (' + expr.replace(/,/g, '.') + ')')()
+      if (typeof val !== 'number' || !Number.isFinite(val)) throw new Error()
+      return say('🧮 ' + expr + ' = *' + (Math.round(val * 1e10) / 1e10) + '*')
+    } catch { return say('🧮 Impossible de calculer ça. Exemple : *calc (12+8)*3*') }
+  }
+  function deCmd(a) {
+    const { arg, say } = a
+    const faces = Math.min(1000, Math.max(2, parseInt(String(arg || '6'), 10) || 6))
+    return say('🎲 Dé ' + faces + ' faces → *' + (1 + Math.floor(Math.random() * faces)) + '*')
+  }
+  function pileCmd(a) { return a.say(Math.random() < 0.5 ? '🪙 *Pile !*' : '🪙 *Face !*') }
+  function ballCmd(a) {
+    const { arg, say } = a
+    if (!String(arg || '').trim()) return say('🎱 Pose une question fermée : *8ball Est-ce que je vais réussir ?*')
+    const R = ['Oui, clairement ✅', 'Sans aucun doute 😎', 'Très probable 👍', 'Les signes disent oui ✨', 'Hmm… redemande plus tard 🌫️', 'Je ne me prononce pas 🤐', 'Ne compte pas dessus 😬', 'Non ❌', 'Très peu probable 👎']
+    return say('🎱 ' + R[Math.floor(Math.random() * R.length)])
+  }
+  function choixCmd(a) {
+    const { arg, say } = a
+    const opts = String(arg || '').split(/\bou\b|,/i).map((s) => s.trim()).filter(Boolean)
+    if (opts.length < 2) return say('🤔 Donne au moins deux choix : *choix pizza ou tacos* (ou *choix a, b, c*)')
+    return say('🤔 Je choisis… *' + opts[Math.floor(Math.random() * opts.length)] + '* !')
+  }
+  function citationCmd(a) {
+    const Q = [
+      ['La simplicité est la sophistication suprême.', 'Léonard de Vinci'],
+      ['Ils ne savaient pas que c’était impossible, alors ils l’ont fait.', 'Mark Twain'],
+      ['Le succès, c’est tomber sept fois, se relever huit.', 'Proverbe japonais'],
+      ['Fais de ta vie un rêve, et d’un rêve, une réalité.', 'Antoine de Saint-Exupéry'],
+      ['Rien ne sert de courir, il faut partir à point.', 'Jean de La Fontaine'],
+      ['La meilleure façon de prédire l’avenir, c’est de le créer.', 'Peter Drucker'],
+      ['On ne voit bien qu’avec le cœur. L’essentiel est invisible pour les yeux.', 'Antoine de Saint-Exupéry'],
+      ['Chaque jour est une nouvelle chance.', 'Anonyme'],
+    ]
+    const q = Q[Math.floor(Math.random() * Q.length)]
+    return a.say('💬 « ' + q[0] + ' »\n— _' + q[1] + '_')
+  }
+  function heureCmd(a) {
+    try {
+      const tz = process.env.TIME_ZONE || 'Europe/Paris'
+      const now = new Date()
+      const date = new Intl.DateTimeFormat('fr-FR', { timeZone: tz, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now)
+      const heure = new Intl.DateTimeFormat('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now)
+      return a.say('🕒 ' + date + '\n⏰ *' + heure + '* (' + tz + ')')
+    } catch { return a.say('🕒 ' + new Date().toLocaleString('fr-FR')) }
+  }
+
   const COMMANDS = {
+    calc: calcCmd,
+    calcul: calcCmd,
+    de: deCmd,
+    dice: deCmd,
+    pile: pileCmd,
+    pileouface: pileCmd,
+    '8ball': ballCmd,
+    boule: ballCmd,
+    choix: choixCmd,
+    citation: citationCmd,
+    quote: citationCmd,
+    heure: heureCmd,
+    date: heureCmd,
+    time: heureCmd,
     menu,
     help: commandList,
     aide: commandList,
